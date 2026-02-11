@@ -1,0 +1,3 @@
+สวัสดีครับ นี้คือโปรเจคในรายวิชา AI Software Development ซึ่งหัวข้อคือ เส้นทางสู่เซียน โดยมี requirement คร่าวๆ คือ ทำระบบที่สามารถอ่านเนื้อเรื่องนิยาย จากไฟล์ pdf หรือ txt แล้ววิเคราะห์เพื่อสร้าง เสียง และ ภาพ(ตัวละคร และ ฉากหลัง) แล้วรวมเป็นวิดีโอได้
+
+Hello, this is a project for the AI ​​Software Development course, with the topic "The Path to Mastery." The basic requirements are: create a system that can read the text of a novel from a PDF or TXT file, then analyze it to create audio and visuals (characters and backgrounds), and finally combine them into a video.
