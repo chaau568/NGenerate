@@ -37,8 +37,12 @@ INSTALLED_APPS = [
     "rest_framework",
 
     # Local apps
-    "users",
+    "users.apps.UsersConfig",
     "payments",
+    "novels",
+    "ngenerate_sessions",
+    "asset",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -143,3 +147,38 @@ USE_TZ = True
 # -------------------------------------------------
 
 STATIC_URL = "static/"
+
+# -------------------------------------------------
+# Pricing Config
+# -------------------------------------------------
+CREDIT_CHAPTER_PER_UNIT = int(env("CREDIT_CHAPTER_PER_UNIT", default=5))
+CREDIT_SENTENCE_PER_UNIT = int(env("CREDIT_SENTENCE_PER_UNIT", default=10))
+CREDIT_CHARACTER_IMAGE = int(env("CREDIT_CHARACTER_IMAGE", default=5))
+CREDIT_SCENE_IMAGE = int(env("CREDIT_SCENE_IMAGE", default=10))
+
+# -------------------------------------------------
+# SYSTEM EMAIL DOMAIN Config
+# -------------------------------------------------
+SYSTEM_EMAIL_DOMAIN = env("SYSTEM_EMAIL_DOMAIN", default="no-email.ngenerate.local")
+
+# -------------------------------------------------
+# BACKGROUND TASK Config
+# -------------------------------------------------
+import os
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# CELERY_BROKER_URL = 'redis://:password@vps-ip-address:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://:password@vps-ip-address:6379/0'
+# CELERY_ACCEPT_CONTENT = ['json']
+# CELERY_TASK_SERIALIZER = 'json'
+
+# -------------------------------------------------
+# MODEL Config
+# -------------------------------------------------
+OLLAMA_URL=env("OLLAMA_URL")
+LLAMA_MODEL=env("LLAMA_MODEL")
+TIMEOUT=int(env("TIMEOUT", default=900))
+
+POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')

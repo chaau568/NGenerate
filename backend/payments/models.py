@@ -1,13 +1,5 @@
 from django.db import models
 from django.core.validators import MinValueValidator
-from django.utils import timezone
-from datetime import timedelta
-
-import qrcode
-import base64
-from io import BytesIO
-import promptpay
-
 from django.conf import settings
 
 class Package(models.Model):
@@ -40,79 +32,75 @@ class Transaction(models.Model):
         related_name='transactions'
     )
     package = models.ForeignKey(Package, on_delete=models.PROTECT)
-    credit_remaining = models.FloatField(
-        default=0.0,
-        validators=[MinValueValidator(0.0)],
-    )
-    
     PAYMENT_STATUS_CHOICES = (
         ('pending', 'PENDING'),
         ('success', 'Success'),
         ('failed', 'Failed'),
         ('expired', 'Expired'),
     )
-    
     payment_status = models.CharField(
         max_length=20, 
         choices=PAYMENT_STATUS_CHOICES, 
         default='pending'
     )
     payment_ref = models.CharField(max_length=255, null=True, blank=True)
-    
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    credit_amount = models.PositiveIntegerField()
     start_at = models.DateTimeField(null=True, blank=True)
     expire_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
-    create_at = models.DateTimeField(auto_now_add=True)
-    update_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(payment_status='pending'),
+                name='unique_pending_transaction_per_user'
+            )
+        ]
     
     def __str__(self):
         return f"{self.user.username} - {self.package.name} ({self.payment_status})"
-    
-    def save(self, *args, **kwargs):
-        if not self.pk and self.package:
-            self.credit_remaining = self.package.credits_limit
-            
-            if not self.start_at:
-                self.start_at = timezone.now()
-                
-            if not self.expire_at:
-                self.expire_at = self.start_at + timedelta(days=self.package.duration_days)
-                
-        super().save(*args, **kwargs)
-        
-    def generate_qr_code(self):
-        promptpay_id = getattr(settings, 'PROMPTPAY_ID')
-        amount = self.package.price
-        
-        pp = promptpay.PromptPay()
-        payload = pp.generate_payload(promptpay_id, amount)
-        
-        img = qrcode.make(payload)
-        
-        buffered = BytesIO()
-        img.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        
-        return f"data:image/png;base64,{img_str}"
 
 class CreditLog(models.Model):
-    transaction = models.ForeignKey(
-        Transaction, 
+    
+    TYPE_CHOICES = (
+        ('topup', 'Topup'),
+        ('analysis_lock', 'Analysis Lock'),
+        ('analysis_complete', 'Analysis Complete'),
+        ('generation_lock', 'Generation Lock'),
+        ('generation_complete', 'Generation Complete'),
+        ('refund', 'Refund'),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='credit_logs'
     )
-    
-    TYPE_CHOICES = (
-        ('analyze', 'Analyze'),
-        ('generate_demo', 'Generate Demo'),
-        ('generate_complete', 'Generate Complete'),
+
+    transaction = models.ForeignKey(
+        'payments.Transaction',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='credit_logs'
     )
-    
-    usage_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
-    credit_spend = models.FloatField(
-        validators=[MinValueValidator(0.0)],
+
+    session = models.ForeignKey(
+        'ngenerate_sessions.Session',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='credit_logs'
     )
-    create_at = models.DateTimeField(auto_now_add=True)
-    
+
+    type = models.CharField(max_length=30, choices=TYPE_CHOICES)
+
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
     def __str__(self):
-        return f"{self.transaction.user.username} used {self.credit_spend} for {self.usage_type}"
+        return f"{self.user} | {self.type} | {self.amount}"

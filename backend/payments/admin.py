@@ -1,55 +1,66 @@
 from django.contrib import admin
 from .models import Package, Transaction, CreditLog
 
+
 @admin.register(Package)
 class PackageAdmin(admin.ModelAdmin):
     list_display = (
-        'name', 
-        'price', 
-        'credits_limit', 
-        'duration_days', 
-        'is_active', 
-        'create_at',
+        "id",
+        "name",
+        "price",
+        "credits_limit",
+        "duration_days",
+        "is_active",
+        "create_at",
     )
-    
-    list_filter = ('is_active', 'create_at')
-    search_fields = ('name',)
-    ordering = ('-create_at',)
-    
+
+    list_filter = ("is_active",)
+    search_fields = ("name",)
+    readonly_fields = ("create_at", "update_at")
+
+
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 
-        'package', 
-        'credit_remaining', 
-        'payment_status', 
-        'start_at', 
-        'expire_at', 
-        'create_at',
+        "id",
+        "user",
+        "package",
+        "amount",
+        "credit_amount",
+        "payment_status",
+        "payment_ref",
+        "created_at",
     )
-    
-    list_filter = ('payment_status', 'package', 'create_at', )
-    search_fields = ('user__username', 'user__email', 'payment_ref', )
-    readonly_fields = ('create_at', 'update_at', 'credit_remaining', )
-    
-    fieldsets = (
-        ('User Info', {'fields': ('user', 'package')}),
-        ('Payment Status', {'fields': ('payment_status', 'payment_ref')}),
-        ('Credit & Validity', {'fields': ('credit_remaining', 'start_at', 'expire_at')}),
-        ('Timestamps', {'fields': ('create_at', 'update_at')}),
+
+    list_filter = ("payment_status", "created_at")
+    search_fields = ("user__email", "payment_ref")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "start_at",
+        "expire_at",
     )
+
+    actions = ["mark_as_success"]
+
+    def mark_as_success(self, request, queryset):
+        updated = queryset.update(payment_status="success")
+        self.message_user(request, f"{updated} transactions marked as success.")
+
+    mark_as_success.short_description = "Mark selected transactions as SUCCESS"
+
 
 @admin.register(CreditLog)
 class CreditLogAdmin(admin.ModelAdmin):
     list_display = (
-        'transaction', 
-        'usage_type', 
-        'credit_spend', 
-        'create_at')
-    
-    list_filter = ('usage_type', 'create_at')
-    search_fields = ('transaction__user__username', 'usage_type')
-    readonly_fields = ('transaction', 'usage_type', 'credit_spend', 'create_at')
+        "id",
+        "user",
+        "type",
+        "amount",
+        "transaction",
+        "created_at",
+    )
 
-    def has_add_permission(self, request):
-        return False
+    list_filter = ("type", "created_at")
+    search_fields = ("user__email",)
+    readonly_fields = ("created_at",)

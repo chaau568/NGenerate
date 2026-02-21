@@ -1,0 +1,28 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    
+    # Create
+    path("create/<int:novel_id>/", views.create_session, name="create-session"),
+
+    # Summary
+    path("summary/analyze/<int:session_id>/", views.summary_analyze, name="summary-analyze"),
+    path("summary/generate/<int:session_id>/", views.summary_generate, name="summary-generate"),
+
+    # Modify Session
+    path("edit/<int:session_id>/", views.edit_session, name="edit-session"),
+
+    # Start
+    path("analyze/<int:session_id>/start/", views.start_analysis, name="analyze-start"),
+    path("generate/<int:session_id>/start/", views.start_generation, name="generate-start"),
+    # path("retry/<int:session_id>/", views.retry_session, name="retry-session"),
+
+    # History & Detail
+    path("history/", views.history, name="history"),
+    path("detail/<int:session_id>/", views.view_detail, name="history-detail"),
+    path("delete/<int:session_id>/", views.delete_session, name="delete-session"),
+    
+    # Transaction History
+    path("history/transaction/", views.transaction_history, name="history-transaction"),
+]

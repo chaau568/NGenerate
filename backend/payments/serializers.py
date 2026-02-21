@@ -1,18 +1,18 @@
 from rest_framework import serializers
-from .models import Transaction
+from .models import Package
 
-class TransactionQRSerializer(serializers.ModelSerializer):
-    qr_code_base64 = serializers.SerializerMethodField()
-    
+
+class PackageSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Transaction
+        model = Package
         fields = [
-            'id', 
-            'package',
-            'payment_status',
-            'credit_remaining', 
-            'qr_code_base64',
+            "id",
+            "name",
+            "price",
+            "credits_limit",
+            "duration_days",
+            "is_active",
+            "create_at",
+            "update_at",
         ]
-        
-    def get_qr_code_base64(self, obj):
-        return obj.generate_qr_code()
+        read_only_fields = ["id", "create_at", "update_at"]
