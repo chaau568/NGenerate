@@ -12,7 +12,25 @@ from .models import Novel, Chapter
 from notifications.models import Notification
 from .tasks import process_uploaded_file_task
 
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from rest_framework import serializers
 
+
+@extend_schema(
+    summary="ดึงรายการนิยายทั้งหมดในชั้นหนังสือ",
+    responses={
+        200: inline_serializer(
+            name='LibraryResponse',
+            fields={
+                "total_novels": serializers.IntegerField(),
+                "chapters": serializers.ListField(
+                    child=serializers.DictField()
+                )
+            }
+        )
+    },
+    tags=["Library"]
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def library(request):
@@ -38,6 +56,20 @@ def library(request):
     
     return Response(data)
 
+@extend_schema(
+    summary="สร้างนิยายเรื่องใหม่",
+    request={
+        'multipart/form-data': inline_serializer(
+            name='CreateNovelRequest',
+            fields={
+                'title': serializers.CharField(),
+                'cover': serializers.ImageField(required=False)
+            }
+        )
+    },
+    responses={201: inline_serializer(name='CreateNovelResponse', fields={'id': serializers.IntegerField(), 'title': serializers.CharField(), 'cover': serializers.URLField()})},
+    tags=["Library"]
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_novel(request):
@@ -59,6 +91,15 @@ def create_novel(request):
         "cover": novel.cover.url if novel.cover else None
     }, status=status.HTTP_201_CREATED)
 
+@extend_schema(
+    summary="รายละเอียดนิยาย / แก้ไข / ลบ",
+    methods=['GET', 'PUT', 'DELETE'],
+    request=inline_serializer(
+        name='UpdateNovelRequest',
+        fields={'title': serializers.CharField(required=False), 'cover': serializers.ImageField(required=False)}
+    ),
+    tags=["Library"]
+)
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def novel_detail(request, novel_id):
@@ -93,6 +134,24 @@ def novel_detail(request, novel_id):
         ]
     }, status=status.HTTP_200_OK)
 
+@extend_schema(
+    summary="เพิ่มบทนิยาย (จากข้อความ หรือ อัปโหลดไฟล์)",
+    description="ส่ง 'story' เป็น String/Array เพื่อบันทึกทันที หรือส่ง 'file' เพื่อประมวลผลใน Background (Celery)",
+    request={
+        'multipart/form-data': inline_serializer(
+            name='CreateChapterRequest',
+            fields={
+                'story': serializers.CharField(required=False, help_text="เนื้อหานิยาย หรือ List ของเนื้อหา"),
+                'file': serializers.FileField(required=False, help_text="ไฟล์ .txt หรือ .docx สำหรับนำเข้า")
+            }
+        )
+    },
+    responses={
+        201: inline_serializer(name='ChapterCreated', fields={'status': serializers.CharField(), 'chapters': serializers.ListField(child=serializers.DictField())}),
+        202: inline_serializer(name='ChapterProcessing', fields={'status': serializers.CharField(), 'message': serializers.CharField()})
+    },
+    tags=["Chapters"]
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_chapter(request, novel_id):
@@ -148,6 +207,11 @@ def create_chapter(request, novel_id):
 
     return Response({"error": "No content or file provided"}, status=status.HTTP_400_BAD_REQUEST)
     
+@extend_schema(
+    summary="รายละเอียดบทนิยาย / แก้ไข / ลบ",
+    methods=['GET', 'PUT', 'DELETE'],
+    tags=["Chapters"]
+)
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def chapter_detail(request, chapter_id):

@@ -6,6 +6,15 @@ from payments.models import Package, Transaction
 from .serializers import PackageSerializer
 from rest_framework import status
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
+
+@extend_schema(
+    summary="สร้าง Package ใหม่ (Admin Only)",
+    request=PackageSerializer,
+    responses={201: PackageSerializer},
+    tags=["Payments Admin"]
+)
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def create_package(request):
@@ -17,6 +26,11 @@ def create_package(request):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@extend_schema(
+    summary="รายการ Package ที่เปิดใช้งาน (Public)",
+    responses={200: PackageSerializer(many=True)},
+    tags=["Payments Public"]
+)
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def list_packages(request):
@@ -24,6 +38,11 @@ def list_packages(request):
     serializer = PackageSerializer(packages, many=True)
     return Response(serializer.data)
 
+@extend_schema(
+    summary="รายการ Package ทั้งหมดรวมที่ปิดใช้งาน (Admin Only)",
+    responses={200: PackageSerializer(many=True)},
+    tags=["Payments Admin"]
+)
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
 def list_all_packages(request):
@@ -31,6 +50,25 @@ def list_all_packages(request):
     serializer = PackageSerializer(packages, many=True)
     return Response(serializer.data)
 
+@extend_schema(
+    summary="สร้างรายการชำระเงินและรับ QR Code",
+    description="เมื่อเรียก API นี้ ระบบจะสร้าง Transaction และส่งข้อมูลสำหรับการจ่ายเงิน (PromptPay QR) กลับไป",
+    request=inline_serializer(
+        name='CreatePaymentRequest',
+        fields={'package_id': serializers.IntegerField()}
+    ),
+    responses={
+        200: inline_serializer(
+            name='CreatePaymentResponse',
+            fields={
+                "transaction_id": serializers.IntegerField(),
+                "ref": serializers.CharField(),
+                "qr": serializers.CharField(help_text="Base64 ของ QR Code")
+            }
+        )
+    },
+    tags=["Payments User"]
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_payment(request):
@@ -45,7 +83,31 @@ def create_payment(request):
         "ref": tx.payment_ref,
         "qr": qr
     })
-    
+
+@extend_schema(
+    summary="รายการรอชำระเงินทั้งหมด (Admin Only)",
+    responses={
+        200: inline_serializer(
+            name='PendingTransactionsResponse',
+            fields={
+                "transactions": serializers.ListField(
+                    child=inline_serializer(
+                        name='PendingTransactionDetail',
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "username": serializers.CharField(),
+                            "package": serializers.CharField(),
+                            "price": serializers.CharField(),
+                            "ref": serializers.CharField(),
+                            "created_at": serializers.DateTimeField(),
+                        }
+                    )
+                )
+            }
+        )
+    },
+    tags=["Payments Admin"]
+)
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
 def pending_transactions(request):
@@ -65,6 +127,15 @@ def pending_transactions(request):
         ]
     })
 
+@extend_schema(
+    summary="กดยืนยันการชำระเงินด้วยมือ (Admin Only)",
+    description="ใช้สำหรับแอดมินตรวจสอบยอดเงินแล้วกดยืนยันเพื่อเพิ่ม Credit ให้ผู้ใช้",
+    responses={
+        200: inline_serializer(name='ConfirmSuccess', fields={"status": serializers.CharField()}),
+        400: inline_serializer(name='ConfirmError', fields={"error": serializers.CharField()})
+    },
+    tags=["Payments Admin"]
+)
 @api_view(["POST"])
 @permission_classes([IsAdminUser])
 def confirm_payment(request, transaction_id):

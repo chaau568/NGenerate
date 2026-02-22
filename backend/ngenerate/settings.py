@@ -35,6 +35,7 @@ INSTALLED_APPS = [
 
     # Third party
     "rest_framework",
+    "drf_spectacular",
 
     # Local apps
     "users.apps.UsersConfig",
@@ -108,9 +109,32 @@ AUTHENTICATION_BACKENDS = [
 # -------------------------------------------------
 
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Ngenerate API Project',
+    'DESCRIPTION': 'NGenerate Web Application',
+    'VERSION': '1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    
+    'COMPONENT_SPLIT_PATCH': True,
+    'SECURITY': [{
+        'jwtAuth': [],
+    }],
+    'APPEND_COMPONENTS': {
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
 }
 
 SIMPLE_JWT = {
@@ -182,3 +206,5 @@ LLAMA_MODEL=env("LLAMA_MODEL")
 TIMEOUT=int(env("TIMEOUT", default=900))
 
 POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')
+
+TTS_SERVICE_URL = env("TTS_SERVICE_URL", default='https://runpod-xxxxx.proxy.runpod.net')

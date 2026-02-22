@@ -75,6 +75,9 @@ class Session(models.Model):
     analysis_finished_at = models.DateTimeField(null=True, blank=True)
     generation_finished_at = models.DateTimeField(null=True, blank=True)
     
+    def __str__(self):
+        return f"{self.name} | {self.session_type} | {self.style}"
+    
     def save(self, *args, **kwargs):
         if not self.id and not self.name:
             self.name = "New Session" 
@@ -411,9 +414,15 @@ class CharacterProfile(models.Model):
         unique_together = ('novel', 'name')
 
     def __str__(self):
-        return f"{self.name} ({self.novel.title})"
+        return f"{self.novel.title} ({self.name})"
         
 class Character(models.Model):
+    
+    session = models.ForeignKey(
+        Session,
+        on_delete=models.CASCADE,
+        related_name='characters'
+    )
 
     profile = models.ForeignKey(
         CharacterProfile,
@@ -426,12 +435,13 @@ class Character(models.Model):
     positive_prompt = models.TextField()
     negative_prompt = models.TextField(blank=True)
 
-    image_path = models.FileField(null=True, blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('profile', 'emotion')
+        
+    def __str__(self):
+        return f"{self.session} | {self.profile} | {self.emotion}"
         
 class Sentence(models.Model):
 
@@ -473,6 +483,9 @@ class Sentence(models.Model):
     class Meta:
         unique_together = ('session', 'chapter', 'sentence_index')
         
+    def __str__(self):
+        return f"{self.session} | {self.chapter} | {self.sentence_index}"
+        
 class Illustration(models.Model):
 
     session = models.ForeignKey(
@@ -491,6 +504,9 @@ class Illustration(models.Model):
 
     class Meta:
         unique_together = ('session', 'chapter')
+        
+    def __str__(self):
+        return f"{self.session} | {self.chapter}"
         
 class ProcessingStep(models.Model):
 
@@ -531,6 +547,9 @@ class ProcessingStep(models.Model):
 
     class Meta:
         ordering = ['phase', 'order']
+        
+    def __str__(self):
+        return f"{self.name} | {self.status}"
         
     def mark_start(self):
         self.status = 'processing'

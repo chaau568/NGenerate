@@ -1,0 +1,14 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Django
+*.log
+.env
+db.sqlite3
+media/
+staticfiles/
+celerybeat-schedule
+celerybeat.pid

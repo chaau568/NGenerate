@@ -5,6 +5,36 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Notification
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
+
+@extend_schema(
+    summary="ดึงรายการแจ้งเตือนทั้งหมด",
+    description="แสดงรายการแจ้งเตือนสถานะการทำงาน (Processing, Success, Error) ของผู้ใช้",
+    responses={
+        200: inline_serializer(
+            name='NotificationListResponse',
+            fields={
+                "notifications": serializers.ListField(
+                    child=inline_serializer(
+                        name='NotificationListItem',
+                        fields={
+                            "id": serializers.IntegerField(),
+                            "task_name": serializers.CharField(),
+                            "status": serializers.CharField(),
+                            "message": serializers.CharField(),
+                            "is_read": serializers.BooleanField(),
+                            "created_at": serializers.DateTimeField(),
+                            "type": serializers.ChoiceField(choices=['session', 'novel']),
+                            "ref_id": serializers.IntegerField()
+                        }
+                    )
+                )
+            }
+        )
+    },
+    tags=["Notifications"]
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
@@ -26,6 +56,31 @@ def notification_list(request):
         
     return Response({"notifications": data})
 
+@extend_schema(
+    summary="ดูรายละเอียดการแจ้งเตือน",
+    description="ดึงรายละเอียดเชิงลึกของการแจ้งเตือน และทำเครื่องหมายว่าอ่านแล้ว (is_read=True) โดยอัตโนมัติ",
+    responses={
+        200: inline_serializer(
+            name='NotificationDetailResponse',
+            fields={
+                "data": inline_serializer(
+                    name='NotificationDetailData',
+                    fields={
+                        "id": serializers.IntegerField(),
+                        "task_name": serializers.CharField(),
+                        "status": serializers.CharField(),
+                        "message": serializers.CharField(),
+                        "is_read": serializers.BooleanField(),
+                        "created_at": serializers.DateTimeField(),
+                        "session_info": serializers.DictField(required=False, allow_null=True),
+                        "novel_info": serializers.DictField(required=False, allow_null=True),
+                    }
+                )
+            }
+        )
+    },
+    tags=["Notifications"]
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_detail(request, notification_id):

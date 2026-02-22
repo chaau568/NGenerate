@@ -69,7 +69,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     def __str__(self):
-        return self.email
+        return f"email: {self.email} | username: {self.username}"
     
     def edit(self, **extra_fields):
         for field, value in extra_fields.items():

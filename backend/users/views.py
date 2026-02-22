@@ -10,8 +10,26 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from django.conf import settings
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
+
 User = get_user_model()
 
+auth_response_schema = inline_serializer(
+    name='AuthResponse',
+    fields={
+        'access': serializers.CharField(),
+        'refresh': serializers.CharField(),
+    }
+)
+
+@extend_schema(
+    summary="ลงทะเบียนผู้ใช้ใหม่",
+    description="สร้างบัญชีผู้ใช้ใหม่ด้วย Email และ Password พร้อมรับ Token สำหรับเข้าใช้งานทันที",
+    request=RegisterSerializer,
+    responses={201: auth_response_schema},
+    tags=["Authentication"]
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
@@ -30,6 +48,22 @@ def register(request):
         status=status.HTTP_201_CREATED,
     )
 
+@extend_schema(
+    summary="เข้าสู่ระบบด้วย Email/Password",
+    request=inline_serializer(
+        name='LoginRequest',
+        fields={
+            'email': serializers.EmailField(),
+            'password': serializers.CharField(),
+        }
+    ),
+    responses={
+        200: auth_response_schema,
+        400: inline_serializer(name='LoginError', fields={'error': serializers.CharField()}),
+        403: inline_serializer(name='LoginForbidden', fields={'error': serializers.CharField()})
+    },
+    tags=["Authentication"]
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def normal_login(request):
@@ -70,7 +104,15 @@ def normal_login(request):
         status=status.HTTP_200_OK,
     )
 
-  
+@extend_schema(
+    summary="เข้าสู่ระบบด้วย Google",
+    request=inline_serializer(
+        name='GoogleLoginRequest',
+        fields={'id_token': serializers.CharField()}
+    ),
+    responses={200: auth_response_schema},
+    tags=["Authentication"]
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def google_login(request):
@@ -125,6 +167,27 @@ def google_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
+@extend_schema(
+    summary="เชื่อมต่อบัญชีกับ Google",
+    description="ใช้สำหรับยืนยันตัวตนด้วย Google ID Token เพื่อเชื่อมต่อหรือตรวจสอบความถูกต้องของอีเมลที่ใช้ในระบบ",
+    request=inline_serializer(
+        name='ConnectGoogleRequest',
+        fields={
+            'id_token': serializers.CharField(help_text="ID Token ที่ได้รับจาก Google SDK")
+        }
+    ),
+    responses={
+        200: inline_serializer(
+            name='ConnectGoogleSuccess',
+            fields={'message': serializers.CharField()}
+        ),
+        400: inline_serializer(
+            name='ConnectGoogleError',
+            fields={'error': serializers.CharField()}
+        ),
+    },
+    tags=["User Profile"]
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])  
 def connect_google(request):
@@ -147,6 +210,24 @@ def connect_google(request):
     except ValueError:
         return Response({"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST)
     
+@extend_schema(
+    summary="ดึงข้อมูลโปรไฟล์ผู้ใช้",
+    description="ดึงข้อมูลส่วนตัวของผู้ใช้ที่กำลัง Login อยู่ รวมถึงจำนวน Credit ที่เหลือ",
+    responses={
+        200: inline_serializer(
+            name='ProfileResponse',
+            fields={
+                "user_id": serializers.IntegerField(),
+                "email": serializers.EmailField(),
+                "username": serializers.CharField(),
+                "role": serializers.CharField(),
+                "status": serializers.CharField(),
+                "credits": serializers.IntegerField(),
+            }
+        )
+    },
+    tags=["User Profile"]
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def profile(request):

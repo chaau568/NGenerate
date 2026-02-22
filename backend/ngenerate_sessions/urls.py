@@ -16,7 +16,7 @@ urlpatterns = [
     # Start
     path("analyze/<int:session_id>/start/", views.start_analysis, name="analyze-start"),
     path("generate/<int:session_id>/start/", views.start_generation, name="generate-start"),
-    # path("retry/<int:session_id>/", views.retry_session, name="retry-session"),
+    path("retry/<int:session_id>/", views.retry_session, name="retry-session"),
 
     # History & Detail
     path("history/", views.history, name="history"),

@@ -23,7 +23,7 @@ class Package(models.Model):
     update_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return self.name
+        return f"package: {self.name}"
 
 class Transaction(models.Model):
     user = models.ForeignKey(

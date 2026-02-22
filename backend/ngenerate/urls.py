@@ -1,30 +1,38 @@
-"""
-URL configuration for ngenerate project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+# 1. Import views จาก drf-spectacular
+from drf_spectacular.views import (
+    SpectacularAPIView, 
+    SpectacularSwaggerView, 
+    SpectacularRedocView
+)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # --- API Documentation ---
+    # ส่วนนี้จะสร้างไฟล์ schema.yml เบื้องหลัง
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    
+    # หน้า Swagger UI สำหรับทดสอบ API (แนะนำอันนี้)
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    
+    # หน้า Redoc สำหรับอ่าน Doc แบบสวยงาม (Optional)
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
+    # --- App Endpoints ---
     path('user/', include("users.urls")),
     path('payment/', include("payments.urls")),
     path('library/', include("novels.urls")),
     path('session/', include("ngenerate_sessions.urls")),
-    # path('asset/', include("asset.urls")),
+    path('asset/', include("asset.urls")),
     path('notification/', include("notifications.urls")),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# การจัดการ Media และ Static files ในช่วง Development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

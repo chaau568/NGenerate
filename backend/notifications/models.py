@@ -48,6 +48,9 @@ class Notification(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user} | {self.task_name}"
 
     def clean(self):
         if not self.session and not self.novel:
