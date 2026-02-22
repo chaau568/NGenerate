@@ -36,7 +36,6 @@ INSTALLED_APPS = [
     "corsheaders",
 
     # Third party
-    "corsheaders",
     "rest_framework",
     "drf_spectacular",
 
@@ -212,3 +211,21 @@ TIMEOUT=int(env("TIMEOUT", default=900))
 POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')
 
 TTS_SERVICE_URL = env("TTS_SERVICE_URL", default='https://runpod-xxxxx.proxy.runpod.net')
+
+# -------------------------------------------------
+# COSR Config
+# -------------------------------------------------
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
