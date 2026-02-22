@@ -32,6 +32,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    
+    "corsheaders",
 
     # Third party
     "corsheaders",
@@ -210,15 +212,3 @@ TIMEOUT=int(env("TIMEOUT", default=900))
 POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')
 
 TTS_SERVICE_URL = env("TTS_SERVICE_URL", default='https://runpod-xxxxx.proxy.runpod.net')
-
-
-# -------------------------------------------------
-# CORS Config
-# -------------------------------------------------
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-CORS_ALLOW_CREDENTIALS = True
