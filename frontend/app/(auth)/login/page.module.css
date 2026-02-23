@@ -1,0 +1,115 @@
+.logoContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+    margin-bottom: 15px;
+}
+
+.logoWrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logoBox {
+  background-color: #1e88e5;
+  color: white;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 900;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.logoText {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+  background: #0f3b6e;
+  border-radius: 12px;
+  color: white;
+  margin: auto; /* ช่วยจัดกึ่งกลางหน้าจอถ้าจำเป็น */
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  border: none;
+  box-sizing: border-box; /* สำคัญมากเพื่อให้ padding ไม่ทำให้ input ทะลุขอบ */
+}
+
+.button {
+  width: 100%;
+  padding: 12px;
+  background: #1e88e5;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.button:hover {
+  background: #1976d2;
+}
+
+.button:disabled {
+  background: #64b5f6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #ff6b6b;
+  font-size: 12px;
+  margin-top: -12px;
+  margin-bottom: 12px;
+}
+
+/* เพิ่มเติมส่วนล่าง */
+.googleContainer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.footerText {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.link {
+  color: #1e90ff;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
