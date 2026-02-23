@@ -27,12 +27,17 @@ backend/.env
 
 
 # ==============================
+<<<<<<< HEAD
 # Frontend (Next.js)
+=======
+# Frontend (Node / Vite / React)
+>>>>>>> back-end
 # ==============================
 
 # Dependencies
 frontend/node_modules/
 
+<<<<<<< HEAD
 # Next.js build output
 frontend/.next/
 frontend/out/
@@ -41,6 +46,11 @@ frontend/out/
 frontend/.turbo/
 
 # Build (เผื่อบางทีใช้)
+=======
+# Build outputs
+frontend/dist/
+frontend/dist-ssr/
+>>>>>>> back-end
 frontend/build/
 
 # Logs
@@ -54,6 +64,7 @@ lerna-debug.log*
 
 # Local env
 frontend/.env
+<<<<<<< HEAD
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.production.local
@@ -61,6 +72,9 @@ frontend/.env.test.local
 
 # TypeScript
 frontend/tsconfig.tsbuildinfo
+=======
+*.local
+>>>>>>> back-end
 
 
 # ==============================
