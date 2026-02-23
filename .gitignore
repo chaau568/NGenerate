@@ -13,7 +13,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Django
+# Django runtime files
 backend/*.log
 backend/db.sqlite3
 backend/media/
@@ -27,17 +27,12 @@ backend/.env
 
 
 # ==============================
-<<<<<<< HEAD
 # Frontend (Next.js)
-=======
-# Frontend (Node / Vite / React)
->>>>>>> back-end
 # ==============================
 
 # Dependencies
 frontend/node_modules/
 
-<<<<<<< HEAD
 # Next.js build output
 frontend/.next/
 frontend/out/
@@ -45,36 +40,27 @@ frontend/out/
 # Turbopack cache
 frontend/.turbo/
 
-# Build (เผื่อบางทีใช้)
-=======
-# Build outputs
+# Other build outputs (เผื่ออนาคต)
+frontend/build/
 frontend/dist/
 frontend/dist-ssr/
->>>>>>> back-end
-frontend/build/
 
 # Logs
-logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-# Local env
+# Frontend env files
 frontend/.env
-<<<<<<< HEAD
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.production.local
 frontend/.env.test.local
 
-# TypeScript
+# TypeScript cache
 frontend/tsconfig.tsbuildinfo
-=======
-*.local
->>>>>>> back-end
 
 
 # ==============================

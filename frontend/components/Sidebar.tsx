@@ -6,7 +6,12 @@ import styles from "./Sidebar.module.css";
 export default function Sidebar() {
   return (
     <aside className={styles.sidebar}>
-      <h2>NGenerate</h2>
+      <div className={styles.logoContainer}>
+        <div className={styles.logoWrapper}>
+          <div className={styles.logoBox}>N</div>
+          <span className={styles.logoText}>GENERATE</span>
+        </div>
+      </div>
 
       <nav>
         <Link href="/library">Library</Link>

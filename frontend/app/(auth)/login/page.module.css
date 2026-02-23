@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-    margin-bottom: 15px;
+  margin-bottom: 15px;
 }
 
 .logoWrapper {
@@ -19,18 +19,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 36px;
   font-weight: 900;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .logoText {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 36px;
+  font-weight: 700;
   letter-spacing: 2px;
   color: white;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .card {
@@ -45,7 +44,7 @@
 
 .title {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .label {
@@ -57,10 +56,9 @@
 .input {
   width: 100%;
   padding: 10px;
-  margin-bottom: 16px;
   border-radius: 6px;
   border: none;
-  box-sizing: border-box; /* สำคัญมากเพื่อให้ padding ไม่ทำให้ input ทะลุขอบ */
+  box-sizing: border-box; 
 }
 
 .button {
@@ -70,7 +68,7 @@
   border: none;
   border-radius: 8px;
   color: white;
-  font-weight: bold;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -91,7 +89,6 @@
   margin-bottom: 12px;
 }
 
-/* เพิ่มเติมส่วนล่าง */
 .googleContainer {
   margin-top: 24px;
   display: flex;
@@ -107,9 +104,48 @@
 .link {
   color: #1e90ff;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .link:hover {
   text-decoration: underline;
+}
+
+.passwordWrapper {
+  position: relative; 
+  width: 100%;
+  margin: 8px 0 16px 0;
+}
+
+.passwordWrapper .input {
+  width: 100%;
+  padding: 10px;
+  padding-right: 60px; 
+  margin-bottom: 0;    
+  border-radius: 6px;
+  border: none;
+  background: white;
+  color: #333;
+}
+
+.toggleButton {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #1e88e5;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  z-index: 2;
+  width: auto; 
+  line-height: 1;
+}
+
+.toggleButton:hover {
+  color: #1565c0;
+  opacity: 1;
 }

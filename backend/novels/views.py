@@ -131,6 +131,13 @@ def novel_detail(request, novel_id):
                 "is_analyzed": c.is_analyzed
             }
             for c in novel.get_chapters()
+        ],
+        "characters": [
+            {
+                "name": char.name,
+                "master_image_path": char.master_image_path.url if char.master_image_path else None,
+            }
+            for char in novel.get_characters()
         ]
     }, status=status.HTTP_200_OK)
 

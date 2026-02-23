@@ -17,8 +17,8 @@ html, body {
 :root {
   --api-success: #28a745;
   --api-error: #dc3545;
-  --main-bg: #ffffff;
-  --text-color: #171717;
+  --main-bg: #0c2d57;
+  --text-color: #ffffff;
   --input-border: #ddd;
 }
 
@@ -28,7 +28,6 @@ html, body {
 body {
   background: var(--main-bg);
   color: var(--text-color);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 /* =========================
@@ -61,7 +60,7 @@ button {
   cursor: pointer;
   background: black;
   color: white;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 button:hover {

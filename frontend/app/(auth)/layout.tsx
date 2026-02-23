@@ -1,5 +1,3 @@
-import "../globals.css";
-
 export default function AuthLayout({
   children,
 }: {
@@ -9,10 +7,10 @@ export default function AuthLayout({
     <div
       style={{
         minHeight: "100vh",
-        background: "#0c2d57",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        padding: "20px",
       }}
     >
       {children}

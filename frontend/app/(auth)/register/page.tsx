@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
@@ -12,6 +13,8 @@ type RegisterForm = {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -70,25 +73,43 @@ export default function RegisterPage() {
         {errors.email && <p className={styles.error}>{errors.email.message}</p>}
 
         <label className={styles.label}>Password</label>
-        <input
-          className={styles.input}
-          type="password"
-          {...register("password", {
-            required: "Password is required",
-          })}
-        />
+        <div className={styles.passwordWrapper}>
+          <input
+            className={styles.input}
+            type={showPassword ? "text" : "password"}
+            {...register("password", { required: "Password is required" })}
+          />
+          <button
+            type="button"
+            className={styles.toggleButton}
+            onMouseEnter={() => setShowPassword(true)}
+            onMouseLeave={() => setShowPassword(false)}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
         {errors.password && (
           <p className={styles.error}>{errors.password.message}</p>
         )}
 
         <label className={styles.label}>Confirm Password</label>
-        <input
-          className={styles.input}
-          type="password"
-          {...register("confirm_password", {
-            required: "Confirm password is required",
-          })}
-        />
+        <div className={styles.passwordWrapper}>
+          <input
+            className={styles.input}
+            type={showConfirmPassword ? "text" : "password"}
+            {...register("confirm_password", {
+              required: "Confirm password is required",
+            })}
+          />
+          <button
+            type="button"
+            className={styles.toggleButton}
+            onMouseEnter={() => setShowConfirmPassword(true)}
+            onMouseLeave={() => setShowConfirmPassword(false)}
+          >
+            {showConfirmPassword ? "Hide" : "Show"}
+          </button>
+        </div>
         {errors.confirm_password && (
           <p className={styles.error}>{errors.confirm_password.message}</p>
         )}

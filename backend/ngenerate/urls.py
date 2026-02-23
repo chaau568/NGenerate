@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework_simplejwt.views import TokenRefreshView
 
 # 1. Import views จาก drf-spectacular
 from drf_spectacular.views import (
@@ -22,6 +23,9 @@ urlpatterns = [
     
     # หน้า Redoc สำหรับอ่าน Doc แบบสวยงาม (Optional)
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
+    # jwt 
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # --- App Endpoints ---
     path('user/', include("users.urls")),

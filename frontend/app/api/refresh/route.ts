@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { serverFetch } from "@/lib/server-api";
 
 export async function POST() {
-  const refresh = cookies().get("refresh")?.value;
+  const cookieStore = await cookies();
+  const refresh = cookieStore.get("refresh")?.value;
 
   if (!refresh) {
     return NextResponse.json(
@@ -12,7 +13,7 @@ export async function POST() {
     );
   }
 
-  const { res, data } = await serverFetch("/auth/refresh/", {
+  const { res, data } = await serverFetch("/api/token/refresh/", {
     method: "POST",
     body: JSON.stringify({ refresh }),
   });

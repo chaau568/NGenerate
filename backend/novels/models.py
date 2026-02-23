@@ -35,6 +35,9 @@ class Novel(models.Model):
     def get_chapters(self):
         return self.chapters.order_by('order')
     
+    def get_characters(self):
+        return self.character_profiles.all()
+    
     def get_chapter_ids(self):
         return list(self.chapters.values_list('id', flat=True))
     

@@ -8,9 +8,14 @@ export async function clientFetch(
   });
 
   if (res.status === 401) {
-    await fetch("/api/refresh", {
+    const refreshRes = await fetch("/api/refresh", {
       method: "POST",
+      credentials: "include",
     });
+
+    if (!refreshRes.ok) {
+      return refreshRes; 
+    }
 
     res = await fetch(url, {
       ...options,
