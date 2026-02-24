@@ -2,10 +2,13 @@ export async function clientFetch(
   url: string,
   options: RequestInit = {}
 ) {
-  let res = await fetch(url, {
-    ...options,
-    credentials: "include",
-  });
+  const makeRequest = () =>
+    fetch(url, {
+      ...options,
+      credentials: "include",
+    });
+
+  let res = await makeRequest();
 
   if (res.status === 401) {
     const refreshRes = await fetch("/api/refresh", {
@@ -14,13 +17,10 @@ export async function clientFetch(
     });
 
     if (!refreshRes.ok) {
-      return refreshRes; 
+      return refreshRes;
     }
 
-    res = await fetch(url, {
-      ...options,
-      credentials: "include",
-    });
+    res = await makeRequest();
   }
 
   return res;

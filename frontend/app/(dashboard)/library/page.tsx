@@ -2,8 +2,8 @@
 
 import { clientFetch } from "@/lib/client-fetch";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import styles from "./page.module.css";
 import Image from "next/image";
 
@@ -21,7 +21,6 @@ interface LibraryData {
 }
 
 export default function LibraryPage() {
-  const router = useRouter();
   const [data, setData] = useState<LibraryData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -110,7 +109,8 @@ export default function LibraryPage() {
           <span className={styles.badge}>{data?.total_novels || 0} novels</span>
         </div>
         <button className={styles.addBtn} onClick={() => setIsModalOpen(true)}>
-          <span className={styles.plusIcon}>+</span> Add New Novel
+          <Plus size={32} strokeWidth={2.5} />
+          <span>Add New Novel</span>
         </button>
       </header>
 
@@ -130,6 +130,8 @@ export default function LibraryPage() {
                   fill
                   className={styles.coverImg}
                   unoptimized
+                  loading="eager"
+                  priority
                 />
               </div>
               <div className={styles.cardInfo}>
@@ -158,6 +160,9 @@ export default function LibraryPage() {
                       alt="Preview"
                       fill
                       className={styles.previewImg}
+                      unoptimized
+                      loading="eager"
+                      priority
                     />
                   ) : (
                     <div className={styles.uploadPlaceholder}>

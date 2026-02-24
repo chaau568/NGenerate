@@ -1,5 +1,6 @@
 "use client";
 
+import { clientFetch } from "@/lib/client-fetch";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
@@ -29,7 +30,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      const res = await fetch("/api/login", {
+      const res = await clientFetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -79,7 +80,7 @@ export default function LoginPage() {
 
   const handleGoogleResponse = async (response: any) => {
     try {
-      const res = await fetch("/api/login-google", {
+      const res = await clientFetch("/api/login-google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: response.credential }),

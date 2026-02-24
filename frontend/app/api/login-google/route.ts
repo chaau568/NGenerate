@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
+import { serverFetch } from "@/lib/server-api";
 
 export async function POST(req: Request) {
   const body = await req.json();
 
-  const res = await fetch(
-    `${process.env.DJANGO_API_URL}/user/login-google/`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }
-  );
-
-  const data = await res.json();
+  const { res, data } = await serverFetch("/user/login-google/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 
   if (!res.ok) {
-    return NextResponse.json(data, { status: 400 });
+    return NextResponse.json(data, { status: res.status });
   }
 
   const response = NextResponse.json({ success: true });
