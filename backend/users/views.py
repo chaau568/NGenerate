@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from django.contrib.auth import authenticate, get_user_model
 from .serializers import RegisterSerializer
 from rest_framework.decorators import api_view, permission_classes
@@ -16,19 +18,20 @@ from rest_framework import serializers
 User = get_user_model()
 
 auth_response_schema = inline_serializer(
-    name='AuthResponse',
+    name="AuthResponse",
     fields={
-        'access': serializers.CharField(),
-        'refresh': serializers.CharField(),
-    }
+        "access": serializers.CharField(),
+        "refresh": serializers.CharField(),
+    },
 )
+
 
 @extend_schema(
     summary="ลงทะเบียนผู้ใช้ใหม่",
     description="สร้างบัญชีผู้ใช้ใหม่ด้วย Email และ Password พร้อมรับ Token สำหรับเข้าใช้งานทันที",
     request=RegisterSerializer,
     responses={201: auth_response_schema},
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -48,23 +51,28 @@ def register(request):
         status=status.HTTP_201_CREATED,
     )
 
+
 @extend_schema(
     summary="เข้าสู่ระบบด้วย Email/Password",
     request=inline_serializer(
-        name='LoginRequest',
+        name="LoginRequest",
         fields={
-            'email': serializers.EmailField(),
-            'password': serializers.CharField(),
-        }
+            "email": serializers.EmailField(),
+            "password": serializers.CharField(),
+        },
     ),
     responses={
         200: auth_response_schema,
-        400: inline_serializer(name='LoginError', fields={'error': serializers.CharField()}),
-        403: inline_serializer(name='LoginForbidden', fields={'error': serializers.CharField()})
+        400: inline_serializer(
+            name="LoginError", fields={"error": serializers.CharField()}
+        ),
+        403: inline_serializer(
+            name="LoginForbidden", fields={"error": serializers.CharField()}
+        ),
     },
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def normal_login(request):
     email = request.data.get("email")
@@ -72,26 +80,19 @@ def normal_login(request):
 
     if not email or not password:
         return Response(
-            {"error": "Email and password required"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "Email and password required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    user = authenticate(
-        request,
-        email=email.lower(),
-        password=password
-    )
+    user = authenticate(request, email=email.lower(), password=password)
 
     if not user:
         return Response(
-            {"error": "Invalid credentials"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if not user.is_active or user.status != "activate":
         return Response(
-            {"error": "Account not active"},
-            status=status.HTTP_403_FORBIDDEN
+            {"error": "Account not active"}, status=status.HTTP_403_FORBIDDEN
         )
 
     refresh = RefreshToken.for_user(user)
@@ -104,14 +105,14 @@ def normal_login(request):
         status=status.HTTP_200_OK,
     )
 
+
 @extend_schema(
     summary="เข้าสู่ระบบด้วย Google",
     request=inline_serializer(
-        name='GoogleLoginRequest',
-        fields={'id_token': serializers.CharField()}
+        name="GoogleLoginRequest", fields={"id_token": serializers.CharField()}
     ),
     responses={200: auth_response_schema},
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -120,21 +121,17 @@ def google_login(request):
 
     if not token:
         return Response(
-            {"error": "id_token required"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "id_token required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     try:
         idinfo = id_token.verify_oauth2_token(
-            token,
-            google_requests.Request(),
-            settings.GOOGLE_CLIENT_ID
+            token, google_requests.Request(), settings.GOOGLE_CLIENT_ID
         )
 
         if not idinfo.get("email_verified"):
             return Response(
-                {"error": "Email not verified"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Email not verified"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         email = idinfo["email"].lower()
@@ -145,7 +142,7 @@ def google_login(request):
                 "username": email.split("@")[0],
                 "status": "activate",
                 "is_active": True,
-            }
+            },
         )
 
         if created:
@@ -163,37 +160,37 @@ def google_login(request):
 
     except ValueError:
         return Response(
-            {"error": "Invalid Google token"},
-            status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST
         )
-    
+
+
 @extend_schema(
     summary="เชื่อมต่อบัญชีกับ Google",
     description="ใช้สำหรับยืนยันตัวตนด้วย Google ID Token เพื่อเชื่อมต่อหรือตรวจสอบความถูกต้องของอีเมลที่ใช้ในระบบ",
     request=inline_serializer(
-        name='ConnectGoogleRequest',
+        name="ConnectGoogleRequest",
         fields={
-            'id_token': serializers.CharField(help_text="ID Token ที่ได้รับจาก Google SDK")
-        }
+            "id_token": serializers.CharField(help_text="ID Token ที่ได้รับจาก Google SDK")
+        },
     ),
     responses={
         200: inline_serializer(
-            name='ConnectGoogleSuccess',
-            fields={'message': serializers.CharField()}
+            name="ConnectGoogleSuccess", fields={"message": serializers.CharField()}
         ),
         400: inline_serializer(
-            name='ConnectGoogleError',
-            fields={'error': serializers.CharField()}
+            name="ConnectGoogleError", fields={"error": serializers.CharField()}
         ),
     },
-    tags=["User Profile"]
+    tags=["User Profile"],
 )
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])  
+@permission_classes([IsAuthenticated])
 def connect_google(request):
     token = request.data.get("id_token")
     if not token:
-        return Response({"error": "id_token required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": "id_token required"}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
         idinfo = id_token.verify_oauth2_token(
@@ -202,20 +199,25 @@ def connect_google(request):
         google_email = idinfo["email"].lower()
 
         if google_email != request.user.email:
-            return Response({"error": "Google email does not match your account email"}, 
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Google email does not match your account email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response({"message": "Successfully connected with Google"})
 
     except ValueError:
-        return Response({"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        return Response(
+            {"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+
 @extend_schema(
     summary="ดึงข้อมูลโปรไฟล์ผู้ใช้",
     description="ดึงข้อมูลส่วนตัวของผู้ใช้ที่กำลัง Login อยู่ รวมถึงจำนวน Credit ที่เหลือ",
     responses={
         200: inline_serializer(
-            name='ProfileResponse',
+            name="ProfileResponse",
             fields={
                 "user_id": serializers.IntegerField(),
                 "email": serializers.EmailField(),
@@ -223,22 +225,33 @@ def connect_google(request):
                 "role": serializers.CharField(),
                 "status": serializers.CharField(),
                 "credits": serializers.IntegerField(),
-            }
+            },
         )
     },
-    tags=["User Profile"]
+    tags=["User Profile"],
 )
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def profile(request):
     user = request.user
-    available_credits = user.credit.available if hasattr(user, 'credit') else 0
-    return Response({
-        "user_id": request.user.id,
-        "email": request.user.email,
-        "username": request.user.username,
-        "role": request.user.role,
-        "status": request.user.status,
-        "credits": available_credits
-    })
+    transaction = (
+        user.transactions.filter(
+            payment_status="success", expire_at__gte=timezone.now()
+        )
+        .order_by("-expire_at")
+        .first()
+    )
 
+    package_name = transaction.package.name if transaction else "free"
+    available_credits = user.credit.available if hasattr(user, "credit") else 0
+    return Response(
+        {
+            "user_id": request.user.id,
+            "email": request.user.email,
+            "username": request.user.username,
+            "role": request.user.role,
+            "package": package_name,
+            "status": request.user.status,
+            "credits": available_credits,
+        }
+    )

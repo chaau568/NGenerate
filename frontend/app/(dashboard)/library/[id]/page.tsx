@@ -160,6 +160,10 @@ export default function NovelDetailPage() {
     router.push(`/library/${id}/characters`);
   };
 
+  const goToChapter = (chapterId: number) => {
+    router.push(`/library/${id}/chapters/${chapterId}`);
+  };
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -187,13 +191,22 @@ export default function NovelDetailPage() {
         {/* Left: Chapter List */}
         <div className={styles.chapterSection}>
           {novel.chapters.map((chap) => (
-            <div key={chap.id} className={styles.chapterRow}>
+            <div
+              key={chap.id}
+              className={styles.chapterRow}
+              onClick={() => goToChapter(chap.id)} // คลิกทั้งแถวเพื่อไปหน้า Detail
+              style={{ cursor: "pointer" }} // ทำให้รู้ว่าคลิกได้
+            >
               {/* 1. ปุ่มติ๊กเลือก (ซ้ายสุด) */}
               <input
                 type="checkbox"
-                className={styles.checkbox} // เพิ่ม class เพื่อแต่งหน้าตา
+                className={styles.checkbox}
                 checked={selectedChapters.includes(chap.id)}
-                onChange={() => toggleChapter(chap.id)}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  toggleChapter(chap.id);
+                }}
+                onClick={(e) => e.stopPropagation()}
               />
 
               {/* 2. ชื่อตอน (ตรงกลาง) */}

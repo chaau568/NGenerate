@@ -88,7 +88,7 @@
 
 .novelTitle {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -181,7 +181,7 @@
   border: none;
   padding: 10px 20px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .confirmBtn {

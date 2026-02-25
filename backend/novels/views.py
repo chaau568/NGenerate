@@ -321,6 +321,7 @@ def chapter_detail(request, chapter_id):
             "title": chapter.title,
             "story": chapter.story,
             "order": chapter.order,
+            "is_analyzed": chapter.is_analyzed,
         },
         status=status.HTTP_200_OK,
     )

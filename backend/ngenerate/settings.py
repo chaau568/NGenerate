@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     # Local apps
     "users.apps.UsersConfig",
     "payments",
-    "novels",
+    "novels.apps.NovelsConfig",
     "ngenerate_sessions",
     "asset",
     "notifications",
