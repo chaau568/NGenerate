@@ -4,6 +4,7 @@ import { clientFetch } from "@/lib/client-fetch";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import SharePopUpSuccess from "@/components/SharePopUp_Success";
 import styles from "./page.module.css";
 import Image from "next/image";
 
@@ -24,12 +25,13 @@ export default function LibraryPage() {
   const [data, setData] = useState<LibraryData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const fetchLibrary = async () => {
     try {
@@ -56,6 +58,23 @@ export default function LibraryPage() {
     }
   };
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (showSuccessModal) {
+      timer = setTimeout(() => {
+        handleSuccessClose();
+      }, 5000);
+    }
+
+    return () => clearTimeout(timer);
+  }, [showSuccessModal]);
+
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    window.location.reload();
+  };
+
   const handleCreateNovel = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -80,7 +99,7 @@ export default function LibraryPage() {
         setSelectedFile(null);
         setPreviewUrl(null);
         setIsModalOpen(false);
-        fetchLibrary();
+        setShowSuccessModal(true);
       } else {
         const err = await res.json();
         alert(err.error || err.detail || "Create failed");
@@ -214,6 +233,12 @@ export default function LibraryPage() {
           </div>
         </div>
       )}
+
+      <SharePopUpSuccess
+        isOpen={showSuccessModal}
+        onClose={handleSuccessClose}
+        title="Upload Success!"
+      />
     </div>
   );
 }

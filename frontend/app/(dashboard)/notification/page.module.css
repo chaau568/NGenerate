@@ -1,6 +1,7 @@
 .container {
-  width: 100%;
-  max-width: 800px; /* จำกัดความกว้างให้อ่านง่ายขึ้นสำหรับหน้า List */
+  padding: 16px 24px 40px;
+  color: white;
+  max-width: 1300px;
   margin: 0 auto;
 }
 
@@ -11,62 +12,94 @@
   margin-bottom: 30px;
 }
 
-.titleGroup {
-  display: flex;
-  align-items: center;
-  gap: 15px;
+.header h1 {
+  font-size: 28px;
+  font-weight: 900;
+  color: #ffffff;
+  margin: 0;
 }
 
-.titleGroup h1 {
-  font-size: 32px;
-  font-weight: 700;
-  color: white;
+.rightGroup {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
 }
 
 .badge {
-  background: rgba(30, 136, 229, 0.2);
-  color: #1e88e5;
-  padding: 6px 12px;
-  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f626;
+  color: #3b82f6;
+  padding: 0 14px;
+  min-width: 120px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid #3b82f633;
+  line-height: 1;
+}
+
+.readAllBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 700;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  gap: 16px;
+  cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.readAllBtn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* Card Styling */
+.card {
+  background: #3b82f626;
+  border: 1px solid #1e88e533;
+  border-radius: 12px;
+  padding: 12px 10px;
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.1s;
 }
 
 .card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  transform: scale(1.015);
+  background: #3b82f61a;
+  border-color: #1e88e566;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  z-index: 10;
 }
 
 .unread {
-  background: rgba(30, 136, 229, 0.05);
-  border-left: 4px solid #1e88e5;
+  border-left: 4px solid #3b82f6;
+  background: #3b82f63d;
 }
 
-.iconWrapper {
-  display: flex;
-  align-items: flex-start;
-  padding-top: 2px;
-}
-
+/* Icons */
 .statusIconProcessing {
-  color: #ffa726; /* Orange */
-  animation: spin 2s linear infinite;
+  color: #fbbf24;
+  animation: spin 12s linear infinite;
+}
+.statusIconSuccess {
+  color: #34d399;
+}
+.statusIconError {
+  color: #ef4444;
 }
 
 @keyframes spin {
@@ -74,12 +107,8 @@
     transform: rotate(0deg);
   }
   to {
-    transform: rotate(360deg);
+    transform: rotate(3600deg);
   }
-}
-
-.statusIconSuccess {
-  color: #66bb6a; /* Green */
 }
 
 .content {
@@ -89,64 +118,119 @@
 .contentHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
+  align-items: flex-start;
+  margin-bottom: 8px;
 }
 
 .taskName {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
+  margin: 0;
 }
 
 .time {
   font-size: 12px;
-  color: #718096;
+  color: #94a3b8;
+  display: block;
+  margin-top: 2px;
 }
 
 .message {
   font-size: 14px;
-  color: #a0aec0;
+  color: #cbd5e1;
   line-height: 1.5;
-  margin-bottom: 12px;
+  margin: 4px 0 8px 0;
 }
 
+/* Footer & Buttons */
 .footer {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+}
+
+.tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .typeTag {
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.05);
+  background: #1e293b;
   padding: 2px 8px;
   border-radius: 4px;
-  color: #718096;
+  color: #9ca3af;
+  border: 1px solid #334155;
 }
 
 .newBadge {
   font-size: 10px;
-  background: #1e88e5;
+  background: #3b82f6;
   color: white;
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 700;
-  text-transform: uppercase;
+  box-shadow: 0 0 10px #3b82f644;
 }
 
-.statusText,
-.emptyState {
-  text-align: center;
-  padding: 100px 0;
-  color: #718096;
-}
-
-.emptyState {
+.actions {
   display: flex;
-  flex-direction: column;
+  gap: 8px;
   align-items: center;
-  gap: 15px;
+  height: 36px;
+}
+
+.viewBtn,
+.retryBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.viewBtn {
+  background: #1e293b;
+  color: #f3f4f6;
+  border-color: #334155;
+  font-weight: 400;
+}
+
+.viewBtn:hover {
+  background: #334155;
+  border-color: #475569;
+}
+
+.retryBtn {
+  background: #f59e0b;
+  color: #000;
+  font-weight: 700;
+  border-color: #f59e0b;
+}
+
+.retryBtn:hover {
+  background: #d97706;
+  border-color: #d97706;
+}
+
+.deleteBtn {
+  background: transparent;
+  color: #64748b;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.deleteBtn:hover {
+  color: #ef4444;
 }

@@ -386,6 +386,39 @@ class Session(models.Model):
             phase=phase,
             status='pending'
         ).order_by('order').first()
+        
+    # =====================================================
+    # NOTIFICATION CONTROL
+    # =====================================================
+        
+    def calculate_notification_status(self):
+        steps = self.processing_steps.all()
+
+        if not steps.exists():
+            return "processing"
+
+        if steps.filter(status="failed").exists():
+            return "error"
+
+        if steps.filter(status="processing").exists():
+            return "processing"
+
+        if steps.filter(status="pending").exists():
+            return "processing"
+
+        return "success"
+    
+    def sync_notification_status(self):
+        latest_notification = self.notifications.order_by("-created_at").first()
+
+        if not latest_notification:
+            return
+
+        new_status = self.calculate_notification_status()
+
+        if latest_notification.status != new_status:
+            latest_notification.status = new_status
+            latest_notification.save(update_fields=["status", "updated_at"])
             
 class CharacterProfile(models.Model):
 
@@ -556,13 +589,25 @@ class ProcessingStep(models.Model):
         self.start_at = timezone.now()
         self.save(update_fields=['status', 'start_at'])
 
+        self.session.sync_notification_status()
+
     def mark_success(self):
         self.status = 'success'
         self.finish_at = timezone.now()
         self.save(update_fields=['status', 'finish_at'])
+
+        self.session.sync_notification_status()
 
     def mark_failed(self, error_msg):
         self.status = 'failed'
         self.error_message = error_msg
         self.finish_at = timezone.now()
         self.save(update_fields=['status', 'error_message', 'finish_at'])
+
+        self.session.sync_notification_status()
+        
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if self.session:
+            self.session.sync_notification_status()

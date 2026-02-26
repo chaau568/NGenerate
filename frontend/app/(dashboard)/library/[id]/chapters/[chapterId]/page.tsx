@@ -12,6 +12,7 @@ import {
   Sparkles,
   AlertTriangle,
 } from "lucide-react";
+import SharePopUpDelete from "@/components/SharePopUp_Delete";
 import styles from "./page.module.css";
 
 interface ChapterData {
@@ -163,35 +164,19 @@ export default function ChapterDetailPage() {
         </button>
       </footer>
       {showDeleteModal && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
-            <div className={styles.modalIcon}>
-              <AlertTriangle size={48} color="#ef4444" />
-            </div>
-            <h3>Delete Chapter?</h3>
+        <SharePopUpDelete
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+          isLoading={isDeleting}
+          title="Delete Chapter?"
+          description={
             <p>
               Are you sure you want to delete{" "}
-              <strong>"{currentData.title}"</strong>? This action cannot be
-              undone.
+              <strong>"{currentData.title}"</strong>? This action cannot be undone.
             </p>
-            <div className={styles.modalActions}>
-              <button
-                className={styles.modalCancelBtn}
-                onClick={() => setShowDeleteModal(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                className={styles.confirmDeleteBtn}
-                onClick={handleDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? "Deleting..." : "Delete Permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
+          }
+        />
       )}
     </div>
   );

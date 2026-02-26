@@ -1,40 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { clientFetch } from "@/lib/client-fetch";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
-  Search,
+  Folder,
   Bell,
   Receipt,
   Crown,
   User,
   LogOut,
 } from "lucide-react";
+import { fetchUnreadCount } from "@/app/services/notification";
+import { fetchProfile } from "@/app/services/profile";
 import Link from "next/link";
 import styles from "./Sidebar.module.css";
-
-type Notification = {
-  id: number;
-  is_read: boolean;
-};
-
-type Profile = {
-  user_id: number;
-  username: string;
-  role: string;
-  package: string;
-};
 
 export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [profile, setProfile] = useState<Profile | null>(null);
-
   const isActive = (path: string) => pathname.startsWith(path);
+
+  // =========================
+  // UNREAD COUNT ONLY (15 วิ)
+  // =========================
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["notification-unread-count"],
+    queryFn: fetchUnreadCount,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
+  // =========================
+  // PROFILE (cache 5 นาที)
+  // =========================
+  const { data: profile } = useQuery({
+    queryKey: ["profile"],
+    queryFn: fetchProfile,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: true,
+  });
 
   const handleLogout = async () => {
     try {
@@ -47,43 +53,8 @@ export default function Sidebar() {
     }
   };
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const res = await clientFetch("/api/notification");
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        const unread = data.notifications.filter(
-          (n: Notification) => !n.is_read,
-        ).length;
-
-        setNotificationCount(unread);
-      } catch (err) {
-        console.error("Notification fetch failed");
-      }
-    };
-
-    const fetchProfile = async () => {
-      try {
-        const res = await clientFetch("/api/profile");
-        if (!res.ok) return;
-
-        const data = await res.json();
-        setProfile(data);
-      } catch (err) {
-        console.error("Profile fetch failed");
-      }
-    };
-
-    fetchNotifications();
-    fetchProfile();
-  }, []);
-
   return (
     <aside className={styles.sidebar}>
-      {/* Logo */}
       <div className={styles.logoContainer}>
         <div className={styles.logoWrapper}>
           <div className={styles.logoBox}>N</div>
@@ -91,7 +62,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Menu */}
       <nav className={styles.nav}>
         <Link
           href="/library"
@@ -109,8 +79,8 @@ export default function Sidebar() {
             isActive("/session") ? styles.active : ""
           }`}
         >
-          <Search size={20} />
-          <span>History</span>
+          <Folder size={20} />
+          <span>Project</span>
         </Link>
 
         <Link
@@ -122,9 +92,7 @@ export default function Sidebar() {
           <Bell size={20} />
           <span>Notification</span>
 
-          {notificationCount > 0 && (
-            <div className={styles.badge}>{notificationCount}</div>
-          )}
+          {unreadCount > 0 && <div className={styles.badge}>{unreadCount}</div>}
         </Link>
 
         <Link
@@ -138,25 +106,23 @@ export default function Sidebar() {
         </Link>
 
         <Link
-          href="/subscription"
+          href="/package"
           className={`${styles.item} ${
-            isActive("/subscription") ? styles.active : ""
+            isActive("/package") ? styles.active : ""
           } ${styles.gold}`}
         >
           <Crown size={20} />
-          <span>Subscription</span>
+          <span>Package</span>
         </Link>
       </nav>
 
       <div className={styles.divider} />
 
-      {/* Logout Button (อยู่เหนือ Profile) */}
       <button onClick={handleLogout} className={styles.logoutButton}>
         <LogOut size={20} />
         <span>Logout</span>
       </button>
 
-      {/* Profile (Clickable) */}
       <Link href="/profile" className={styles.profile}>
         <div className={styles.profileIconWrapper}>
           <User size={20} className={styles.profileIcon} />

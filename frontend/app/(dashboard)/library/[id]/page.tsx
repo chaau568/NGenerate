@@ -11,6 +11,8 @@ import {
   FileText,
   UploadCloud,
 } from "lucide-react";
+import SharePopUpDelete from "@/components/SharePopUp_Delete";
+import SharePopUpSuccess from "@/components/SharePopUp_Success";
 import styles from "./page.module.css";
 import Image from "next/image";
 
@@ -51,6 +53,8 @@ export default function NovelDetailPage() {
   const [storyText, setStoryText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -101,6 +105,18 @@ export default function NovelDetailPage() {
     }
   };
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (showSuccessModal) {
+      timer = setTimeout(() => {
+        handleSuccessClose();
+      }, 5000);
+    }
+
+    return () => clearTimeout(timer); 
+  }, [showSuccessModal]);
+
   const handleAddChapter = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
@@ -126,8 +142,7 @@ export default function NovelDetailPage() {
       }
 
       if (res.ok) {
-        alert("Success!");
-        window.location.reload();
+        setShowSuccessModal(true);
       } else {
         const err = await res.json();
         alert(err.detail || "Upload failed");
@@ -138,6 +153,11 @@ export default function NovelDetailPage() {
       setIsUploading(false);
       setShowAddModal(false);
     }
+  };
+
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    window.location.reload();
   };
 
   if (!novel) return <div className={styles.loading}>Loading...</div>;
@@ -265,34 +285,19 @@ export default function NovelDetailPage() {
       </div>
 
       {showDeleteModal && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
-            <div className={styles.modalIcon}>
-              <AlertTriangle size={48} color="#ef4444" />
-            </div>
-            <h3>Delete Novel?</h3>
+        <SharePopUpDelete
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleDelete}
+          isLoading={isDeleting}
+          title="Delete Novel?"
+          description={
             <p>
               Are you sure you want to delete <strong>"{novel.title}"</strong>?
               This action cannot be undone and all chapters will be lost.
             </p>
-            <div className={styles.modalActions}>
-              <button
-                className={styles.cancelBtn}
-                onClick={() => setShowDeleteModal(false)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                className={styles.confirmDeleteBtn}
-                onClick={handleDelete}
-                disabled={isDeleting}
-              >
-                {isDeleting ? "Deleting..." : "Delete Permanently"}
-              </button>
-            </div>
-          </div>
-        </div>
+          }
+        />
       )}
 
       {showAddModal && (
@@ -375,6 +380,11 @@ export default function NovelDetailPage() {
           </div>
         </div>
       )}
+      <SharePopUpSuccess
+        isOpen={showSuccessModal}
+        onClose={handleSuccessClose}
+        title="Upload Success!"
+      />
     </div>
   );
 }

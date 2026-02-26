@@ -80,6 +80,6 @@ class IllustrationAdmin(admin.ModelAdmin):
 
 @admin.register(ProcessingStep)
 class ProcessingStepAdmin(admin.ModelAdmin):
-    list_display = ('session', 'phase', 'name', 'order', 'status', 'finish_at')
+    list_display = ('session', 'phase', 'name', 'order', 'status', 'start_at', 'finish_at')
     list_filter = ('phase', 'status')
-    readonly_fields = ('start_at', 'finish_at')
+    # readonly_fields = ('start_at', 'finish_at')
