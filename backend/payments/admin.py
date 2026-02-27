@@ -10,6 +10,8 @@ class PackageAdmin(admin.ModelAdmin):
         "price",
         "credits_limit",
         "duration_days",
+        "recommendation",
+        "features",
         "is_active",
         "create_at",
     )

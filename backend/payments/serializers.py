@@ -11,8 +11,9 @@ class PackageSerializer(serializers.ModelSerializer):
             "price",
             "credits_limit",
             "duration_days",
+            "recommendation",
+            "features",
             "is_active",
             "create_at",
             "update_at",
         ]
-        read_only_fields = ["id", "create_at", "update_at"]

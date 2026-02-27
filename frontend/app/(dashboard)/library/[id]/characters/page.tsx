@@ -70,7 +70,7 @@ export default function CharacterListPage({
           <button onClick={() => router.back()} className={styles.backBtn}>
             <ChevronLeft size={22} />
           </button>
-          <h1>View Characters</h1>
+          <h1>View Chapters</h1>
         </div>
       </header>
 

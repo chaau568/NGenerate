@@ -116,3 +116,10 @@ class UserCredit(models.Model):
     def __str__(self):
         return f"{self.user.email} | available={self.available}"
     
+    def add_credit(self, amount: int):
+        if amount <= 0:
+            raise ValueError("Credit amount must be positive")
+
+        self.available += amount
+        self.save(update_fields=["available", "updated_at"])
+    

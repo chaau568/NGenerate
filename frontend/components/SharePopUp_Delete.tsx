@@ -7,7 +7,7 @@ import styles from "./SharePopUp_Delete.module.css"; // แยกไฟล์ CS
 interface SharePopUpDeleteProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => void | Promise<void>;
   title?: string;
   description?: React.ReactNode; // ใช้ ReactNode เพื่อให้ใส่ <strong> ได้
   confirmText?: string;

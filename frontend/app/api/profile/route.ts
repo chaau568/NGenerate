@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { serverFetch } from "@/lib/server-api";
 
-// ดึงข้อมูล Profile
 export async function GET() {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("access")?.value;

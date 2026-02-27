@@ -18,6 +18,10 @@ class Package(models.Model):
         default=30,
         validators=[MinValueValidator(1)], 
     )
+    
+    recommendation = models.CharField(max_length=100, blank=True, null=True)
+    features = models.JSONField(default=list, help_text="เก็บรายการสิทธิประโยชน์เป็น list ของ string")
+    
     is_active = models.BooleanField(default=True) 
     create_at = models.DateTimeField(auto_now_add=True)
     update_at = models.DateTimeField(auto_now=True)
@@ -57,6 +61,11 @@ class Transaction(models.Model):
                 fields=['user'],
                 condition=models.Q(payment_status='pending'),
                 name='unique_pending_transaction_per_user'
+            ),
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(payment_status='success'),
+                name='unique_active_success_transaction_per_user'
             )
         ]
     
