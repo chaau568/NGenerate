@@ -14,6 +14,8 @@ from django.conf import settings
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
+from .serializers import ProfileUpdateSerializer
+from django.contrib.auth.hashers import check_password
 
 User = get_user_model()
 
@@ -230,10 +232,43 @@ def connect_google(request):
     },
     tags=["User Profile"],
 )
-@api_view(["GET"])
+@api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
 def profile(request):
     user = request.user
+
+    if request.method == "DELETE":
+
+        if not user.has_usable_password():
+            return Response(
+                {"detail": "You must set a password before deleting account."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        password = request.data.get("password")
+
+        if not password:
+            return Response(
+                {"password": "Password is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not check_password(password, user.password):
+            return Response(
+                {"password": "Incorrect password."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user.soft_delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    if request.method == "PUT":
+        serializer = ProfileUpdateSerializer(
+            user, data=request.data, context={"request": request}, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
     transaction = (
         user.transactions.filter(
             payment_status="success", expire_at__gte=timezone.now()
@@ -244,14 +279,19 @@ def profile(request):
 
     package_name = transaction.package.name if transaction else "free"
     available_credits = user.credit.available if hasattr(user, "credit") else 0
+    limit_credits = transaction.package.credits_limit if transaction else 0
+
     return Response(
         {
-            "user_id": request.user.id,
-            "email": request.user.email,
-            "username": request.user.username,
-            "role": request.user.role,
+            "user_id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "role": user.role,
             "package": package_name,
-            "status": request.user.status,
+            "status": user.status,
             "credits": available_credits,
-        }
+            "limit_credits": limit_credits,
+            "has_password": user.has_usable_password(),
+        },
+        status=status.HTTP_200_OK,
     )

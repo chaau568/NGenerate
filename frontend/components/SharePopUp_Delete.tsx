@@ -12,6 +12,9 @@ interface SharePopUpDeleteProps {
   description?: React.ReactNode; // ใช้ ReactNode เพื่อให้ใส่ <strong> ได้
   confirmText?: string;
   isLoading?: boolean;
+  showPasswordInput?: boolean;
+  passwordValue?: string;
+  onPasswordChange?: (value: string) => void;
 }
 
 export default function SharePopUpDelete({
@@ -22,12 +25,14 @@ export default function SharePopUpDelete({
   description = "Are you sure you want to delete this item? This action cannot be undone.",
   confirmText = "Delete Permanently",
   isLoading = false,
+  showPasswordInput = false,
+  passwordValue = "",
+  onPasswordChange,
 }: SharePopUpDeleteProps) {
   if (!isOpen) return null;
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
-      {/* stopPropagation เพื่อไม่ให้คลิกที่เนื้อหาแล้วปิด Modal */}
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalIcon}>
           <AlertTriangle size={48} color="#ef4444" />
@@ -38,6 +43,22 @@ export default function SharePopUpDelete({
         <div className={styles.modalDescription}>
           {typeof description === "string" ? <p>{description}</p> : description}
         </div>
+
+        {/* ส่วนที่เพิ่มเข้ามา: ช่องกรอกรหัสผ่าน */}
+        {showPasswordInput && (
+          <div className={styles.passwordInputGroup}>
+            <label htmlFor="delete-password">Confirm with Password</label>
+            <input
+              id="delete-password"
+              type="password"
+              placeholder="Enter your password"
+              value={passwordValue}
+              onChange={(e) => onPasswordChange?.(e.target.value)}
+              className={styles.passwordInput}
+              autoFocus
+            />
+          </div>
+        )}
 
         <div className={styles.modalActions}>
           <button
@@ -50,7 +71,7 @@ export default function SharePopUpDelete({
           <button
             className={styles.confirmDeleteBtn}
             onClick={onConfirm}
-            disabled={isLoading}
+            disabled={isLoading || (showPasswordInput && !passwordValue)}
           >
             {isLoading ? "Deleting..." : confirmText}
           </button>

@@ -92,6 +92,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         
         self.save()
         return self
+    
+    def soft_delete(self):
+        with transaction.atomic():
+            self.novels.all().delete()
+            self.status = "deleted"
+            self.is_active = False
+            self.set_unusable_password()
+            
+            self.save()
         
 class UserCredit(models.Model):
     user = models.OneToOneField(

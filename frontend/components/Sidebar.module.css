@@ -108,6 +108,8 @@
   color: white;
   font-size: 14px;
   position: relative;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .item:hover {
@@ -155,24 +157,20 @@
   background: #0c3f79;
 }
 
-.logoutButton {
+.logout {
+  all: unset;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
   border-radius: 999px;
-  color: #ff4d4d;
-  background: #0c2d57;
-  font-size: 14px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
   width: 100%;
-  text-align: left;
-  margin-top: auto;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: #ff4d4d;
 }
 
-.logoutButton:hover {
+.logout:hover {
   background: #0c3f79;
   color: #ff6666;
 }

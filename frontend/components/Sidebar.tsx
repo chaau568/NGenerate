@@ -118,7 +118,10 @@ export default function Sidebar() {
 
       <div className={styles.divider} />
 
-      <button onClick={handleLogout} className={styles.logoutButton}>
+      <button
+        onClick={handleLogout}
+        className={`${styles.item} ${styles.logout}`}
+      >
         <LogOut size={20} />
         <span>Logout</span>
       </button>
