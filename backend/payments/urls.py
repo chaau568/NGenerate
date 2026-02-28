@@ -9,4 +9,6 @@ urlpatterns = [
     path("admin/pending/", views.pending_transactions, name="get-transactions-pending"),
     path("admin/<int:transaction_id>/confirm/", views.confirm_payment, name="confirm-payment"),
     path("checking/<int:transaction_id>/", views.check_payment, name="get-payment-status"),
+    path("my-payments/", views.my_payments, name="my-payments"),
+    path("my-credit-logs/", views.my_credit_logs, name="my-credit-logs"),
 ]

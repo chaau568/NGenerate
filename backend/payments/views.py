@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from payments.services.payment_service import PaymentService
-from payments.models import Package, Transaction
+from payments.models import Package, Transaction, CreditLog
 from .serializers import PackageSerializer
 from rest_framework import status
 
@@ -194,3 +194,76 @@ def check_payment(request, transaction_id):
     tx = get_object_or_404(Transaction, id=transaction_id, user=request.user)
 
     return Response({"payment_status": tx.payment_status}, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="ประวัติการชำระเงินของผู้ใช้",
+    tags=["Payments User"],
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_payments(request):
+    transactions = (
+        Transaction.objects.filter(user=request.user)
+        .select_related("package")
+        .order_by("-created_at")
+    )
+
+    data = [
+        {
+            "id": tx.id,
+            "date_time": tx.created_at,
+            "package": tx.package.name,
+            "amount": str(tx.amount),
+            "status": tx.payment_status,
+        }
+        for tx in transactions
+    ]
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    summary="ประวัติการใช้เครดิตของผู้ใช้",
+    tags=["Payments User"],
+)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_credit_logs(request):
+    logs = (
+        CreditLog.objects.filter(user=request.user)
+        .select_related("session", "transaction")
+        .order_by("-created_at")
+    )
+
+    def map_status(log_type):
+        if "lock" in log_type:
+            return "processing"
+        if "complete" in log_type or log_type == "refund" or log_type == "topup":
+            return "completed"
+        return "unknown"
+
+    def map_action(log_type):
+        mapping = {
+            "analysis_lock": "Analyze",
+            "analysis_complete": "Analyze",
+            "generation_lock": "Generate",
+            "generation_complete": "Generate",
+            "topup": "Topup",
+            "refund": "Refund",
+        }
+        return mapping.get(log_type, log_type)
+
+    data = [
+        {
+            "id": log.id,
+            "date_time": log.created_at,
+            "activate": map_action(log.type),
+            "details": (log.session.name if log.session and log.session.name else "-"),
+            "credits": str(log.amount),
+            "status": map_status(log.type),
+        }
+        for log in logs
+    ]
+
+    return Response(data, status=status.HTTP_200_OK)
