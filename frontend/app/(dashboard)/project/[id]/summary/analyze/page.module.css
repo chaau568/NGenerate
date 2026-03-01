@@ -1,0 +1,328 @@
+.container {
+  padding: 16px 24px 40px;
+  color: white;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h1 {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.backBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.backBtn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Session Name & Input */
+.sessionWrapper {
+  margin-bottom: 30px;
+}
+
+.labelTitle {
+  font-size: 14px;
+  color: #60a5fa;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.sessionEditRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.sessionInput {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  padding: 14px 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 18px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Neon Blue Hover สำหรับ Input */
+.sessionInput:hover,
+.sessionInput:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #00d2ff;
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.25);
+  outline: none;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 10px;
+}
+
+.showButtons {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.confirmBtn,
+.cancelBtn {
+  padding: 0 24px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  color: rgba(255, 255, 255, 0.5);
+  background-color: #0c2d57;
+}
+
+.confirmBtn:disabled,
+.cancelBtn:disabled {
+  cursor: default;
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.confirmBtn {
+  background-color: #0c2d57;
+  color: white;
+  border: 1px solid #1e40af;
+  transition: all 0.2s ease;
+}
+
+.confirmBtn:not(:disabled):hover {
+  background-color: #16a34a;
+  border-color: #22c55e;
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+  transform: translateY(-2px);
+}
+
+.cancelBtn {
+  background-color: #0c2d57;
+  color: white;
+  border: 1px solid #1e40af;
+  transition: all 0.2s ease;
+}
+
+.cancelBtn:not(:disabled):hover {
+  background-color: #1e40af;
+  border-color: #3b82f6;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Main Card */
+.card {
+  background: #0f2f5c;
+  border-radius: 24px;
+  padding: 40px;
+  display: flex;
+  gap: 40px;
+}
+
+.chapterSection {
+  flex: 1;
+}
+
+.chapterHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.countBadge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.addChapterBtn {
+  background: transparent;
+  border: none;
+  color: #60a5fa;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.chapterList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chapterCard {
+  background: white;
+  padding: 12px 20px;
+  border-radius: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: 0.3s;
+  border: 1px solid transparent;
+}
+
+/* Modern Neon Hover สำหรับ Chapter */
+.chapterCard:hover {
+  transform: translateX(8px);
+  border-color: #00d2ff;
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.2);
+}
+
+.chapterInfo {
+  flex: 1;
+  margin-right: 20px;
+}
+
+.chapterLabel {
+  color: #3b82f6;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.chapterName {
+  color: #1e293b;
+  font-weight: 600;
+  margin: 2px 0 0 0;
+  font-size: 15px;
+  /* จัดการชื่อยาวๆ */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.deleteBtn {
+  background: #fee2e2;
+  color: #ef4444;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+  flex-shrink: 0;
+}
+
+.deleteBtn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* RIGHT SIDE (Summary) */
+.actionSection {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.summaryGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summaryGrid div {
+  display: flex;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: 0.3s;
+}
+
+.summaryGrid div:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #00d2ff;
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.1);
+}
+
+.total {
+  background: #1e3a8a !important;
+  border: 1px solid #3b82f6 !important;
+}
+
+.remaining {
+  background: rgba(34, 197, 94, 0.1) !important;
+  color: #4ade80;
+}
+
+.analyzeBtn {
+  background: #facc15;
+  color: #0f172a;
+  border: none;
+  border-radius: 20px;
+  padding: 24px;
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 0 30px rgba(250, 204, 21, 0.3);
+  transition: 0.25s;
+}
+
+.analyzeBtn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 40px rgba(250, 204, 21, 0.5);
+}
+
+.analyzeBtn:disabled {
+  opacity: 0.5;
+  filter: grayscale(0.5);
+}
+
+.warning {
+  color: #f87171;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.loading {
+  padding: 100px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 18px;
+}

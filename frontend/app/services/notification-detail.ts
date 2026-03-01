@@ -1,18 +1,29 @@
 import { clientFetch } from "@/lib/client-fetch";
 
+export type ProcessingStepStatus =
+    | "pending"
+    | "processing"
+    | "success"
+    | "failed";
+
 export type ProcessingStep = {
     id: number;
     name: string;
-    status: "pending" | "analyzing" | "analyzed" | "fail";
+    status: ProcessingStepStatus;
     started_at: string | null;
     finished_at: string | null;
     error_message: string | null;
 };
 
+export type NotificationStatus =
+    | "processing"
+    | "success"
+    | "error";
+
 export type NotificationDetail = {
     id: number;
     task_name: string;
-    status: string;
+    status: NotificationStatus;
     message: string;
     is_read: boolean;
     created_at: string;

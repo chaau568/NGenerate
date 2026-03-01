@@ -1,19 +1,28 @@
 export async function serverFetch(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { raw?: boolean } = {}
 ) {
-  const isFormData = options.body instanceof FormData;
+  const { raw, ...fetchOptions } = options;
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${endpoint}`,
-    {
-      ...options,
-      headers: {
-        ...(isFormData ? {} : { "Content-Type": "application/json" }),
-        ...(options.headers || {}),
-      },
-    }
-  );
+  const isFormData = fetchOptions.body instanceof FormData;
+
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!baseUrl) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not defined");
+  }
+
+  const res = await fetch(`${baseUrl}${endpoint}`, {
+    ...fetchOptions,
+    headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(fetchOptions.headers || {}),
+    },
+  });
+
+  if (raw) {
+    return { res };
+  }
 
   let data = null;
 

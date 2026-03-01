@@ -32,20 +32,14 @@ export default function NotificationDetailPage() {
   const processing = data.processing;
   let overallStatus: "success" | "processing" | "failed" = "processing";
 
-  if (
-    processing?.steps?.some((s) => s.status === "fail" || s.status === "failed")
-  ) {
+  if (processing?.steps?.some((s) => s.status === "failed")) {
     overallStatus = "failed";
-  } else if (
-    processing?.steps?.every(
-      (s) => s.status === "analyzed" || s.status === "generated",
-    )
-  ) {
+  } else if (processing?.steps?.every((s) => s.status === "success")) {
     overallStatus = "success";
+  } else if (processing?.steps?.some((s) => s.status === "processing")) {
+    overallStatus = "processing";
   } else {
-    if (data.status === "error" || data.status === "failed")
-      overallStatus = "failed";
-    else if (data.status === "success") overallStatus = "success";
+    overallStatus = "processing";
   }
 
   return (
@@ -81,13 +75,9 @@ export default function NotificationDetailPage() {
             <h2>Analysis Workflow</h2>
 
             {processing.steps?.map((step) => {
-              const isSuccess =
-                step.status === "analyzed" || step.status === "generated";
-
-              const isProcessing =
-                step.status === "analyzing" || step.status === "generating";
-
-              const isFail = step.status === "fail" || step.status === "failed";
+              const isSuccess = step.status === "success";
+              const isProcessing = step.status === "processing";
+              const isFail = step.status === "failed";
 
               return (
                 <div

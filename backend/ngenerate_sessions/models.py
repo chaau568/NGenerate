@@ -336,7 +336,8 @@ class Session(models.Model):
             return 0
         
         success_count = steps.filter(status='success').count()
-        return int((success_count / total) * 100)
+        progress = (success_count / total) * 100
+        return round(progress)
     
     def update_notification_progress(self):
 
@@ -386,6 +387,52 @@ class Session(models.Model):
             phase=phase,
             status='pending'
         ).order_by('order').first()
+        
+    def sync_session_status(self):
+        steps = self.processing_steps.all()
+
+        if not steps.exists():
+            return
+
+        if steps.filter(status='failed').exists():
+            self.status = 'failed'
+            self.save(update_fields=['status'])
+            return
+
+        for phase in ['analysis', 'generation']:
+            phase_steps = steps.filter(phase=phase)
+
+            if not phase_steps.exists():
+                continue
+
+            total = phase_steps.count()
+
+            success_count = phase_steps.filter(status='success').count()
+            processing_count = phase_steps.filter(status='processing').count()
+
+            if success_count == total:
+                if phase == 'analysis':
+                    self.status = 'analyzed'
+                    self.is_analysis_done = True
+                    self.analysis_finished_at = timezone.now()
+                elif phase == 'generation':
+                    self.status = 'generated'
+                    self.is_generation_done = True
+                    self.generation_finished_at = timezone.now()
+
+            elif processing_count == total:
+                if phase == 'analysis':
+                    self.status = 'analyzing'
+                elif phase == 'generation':
+                    self.status = 'generating'
+
+        self.save(update_fields=[
+            'status',
+            'is_analysis_done',
+            'is_generation_done',
+            'analysis_finished_at',
+            'generation_finished_at'
+        ])
         
     # =====================================================
     # NOTIFICATION CONTROL
@@ -596,6 +643,7 @@ class ProcessingStep(models.Model):
         self.finish_at = timezone.now()
         self.save(update_fields=['status', 'finish_at'])
 
+        self.session.sync_session_status()
         self.session.sync_notification_status()
 
     def mark_failed(self, error_msg):

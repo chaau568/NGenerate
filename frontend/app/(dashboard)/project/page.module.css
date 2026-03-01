@@ -1,0 +1,331 @@
+.container {
+  padding: 16px 24px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: white;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 900;
+  margin: 40px 0 20px;
+}
+
+.statusText {
+  text-align: center;
+  padding: 80px;
+  color: #94a3b8;
+}
+
+/* ================= CURRENT TASK ================= */
+
+.currentCard {
+  background: #3b82f626;
+  border-radius: 16px;
+  padding: 22px;
+  margin-bottom: 20px;
+  transition: 0.25s ease;
+  cursor: pointer;
+  overflow: hidden; /* กันล้น */
+}
+
+.currentCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.currentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+/* สำคัญมาก */
+.leftSection {
+  flex: 1;
+  min-width: 0;
+}
+
+.sessionTitle {
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ด้านขวา fix ไม่ให้ล้น */
+.rightGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.progressText {
+  color: #facc15;
+  font-weight: 700;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Progress bar */
+
+.progressBarWrapper {
+  margin-top: 16px;
+  background: #334155;
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.progressActive {
+  background: linear-gradient(90deg, #327ef7, #60a5fa, #3782f9);
+  background-size: 200% 100%;
+  animation: flow 2s linear infinite;
+}
+
+@keyframes flow {
+  0% {
+    background-position: 0% 0%;
+  }
+  100% {
+    background-position: 200% 0%;
+  }
+}
+
+/* animated dots */
+
+.working {
+  display: inline-flex;
+  position: relative;
+  padding-right: 20px;
+}
+
+.working::after {
+  content: "";
+  position: absolute;
+  left: 80%;
+  padding-left: 2px;
+  /* text-align: left; */
+  animation: dots 2.5s infinite steps(4);
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+  100% {
+    content: "";
+  }
+}
+
+/* ================= GRID ================= */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.expandCard {
+  background: #3b82f626;
+  border-radius: 18px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  min-height: 220px;
+  transition:
+    transform 0.35s ease,
+    box-shadow 0.35s ease;
+  transform-origin: center;
+}
+
+.expandCard:hover {
+  transform: scale(1.05) translateY(-6px);;
+  z-index: 5;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
+}
+
+.cardMain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status {
+  color: #94a3b8;
+}
+
+.version {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+/* ================= BUTTONS ================= */
+
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.viewBtn,
+.generateBtn,
+.watchBtn,
+.downloadBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.viewBtn {
+  background: #2563eb;
+  color: white;
+  padding: 10px 22px;
+}
+
+.viewBtn:hover {
+  background: #1d4ed8;
+}
+
+.generateBtn {
+  background: #facc15;
+  color: black;
+  padding: 8px 14px;
+}
+
+.watchBtn {
+  background: #3b82f6;
+  color: white;
+  padding: 8px 14px;
+}
+
+.downloadBtn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.25s;
+}
+
+.downloadBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(139, 92, 246, 0.6);
+}
+
+.deleteBtn {
+  background: #ef4444;
+  border: none;
+  color: white;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.metaInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.cardContent {
+  display: flex;
+  gap: 18px;
+}
+
+/* Cover fixed width */
+.coverWrapper {
+  position: relative;
+  width: 150px;
+  height: 200px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.coverImg {
+  object-fit: cover;
+}
+
+/* Right section */
+.infoSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== Hidden by default ===== */
+
+.extraInfo {
+  opacity: 0;
+  transform: translateX(-15px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.expandCard:hover .extraInfo {
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0.1s;
+}

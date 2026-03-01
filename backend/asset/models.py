@@ -11,7 +11,7 @@ def get_session_asset_path(instance, filename, asset_folder):
     """
     ngenerate_storage/user_{user_id}/session_{session_id}/asset_folder/filename
     """
-    user_id = instance.session.user.id
+    user_id = instance.session.novel.user.id 
     session_id = instance.session.id
 
     return os.path.join(

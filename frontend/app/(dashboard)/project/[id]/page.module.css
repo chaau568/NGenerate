@@ -1,0 +1,163 @@
+.container {
+  padding: 32px;
+  color: white;
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.subtitle {
+  opacity: 0.7;
+  margin-bottom: 32px;
+}
+
+.backBtn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Progress */
+
+.progressText {
+  font-size: 40px;
+  font-weight: bold;
+}
+
+.progressBar {
+  height: 12px;
+  background: #2c3e50;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.progressSection {
+  margin-bottom: 48px;
+}
+
+/* ===== OVERALL STATUS COLORS ===== */
+
+.success .progressText {
+  color: #22c55e;
+}
+.success .progressFill {
+  background-color: #22c55e;
+}
+
+.processing .progressText {
+  color: #f59e0b;
+}
+.processing .progressFill {
+  background-color: #f59e0b;
+}
+
+.failed .progressText {
+  color: #ef4444;
+}
+.failed .progressFill {
+  background-color: #ef4444;
+}
+
+/* Steps */
+
+.step {
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #3b82f626;
+  border: 2px solid transparent;
+}
+
+.workflow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.success {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.processing {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.failed {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.stepLeft {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+}
+
+.stepRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.timeRow {
+  display: flex;
+  gap: 6px;
+  font-size: 14px;
+  opacity: 0.8;
+  margin-top: 6px;
+}
+
+.errorBox {
+  margin-top: 10px;
+  background: rgba(239, 68, 68, 0.15);
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

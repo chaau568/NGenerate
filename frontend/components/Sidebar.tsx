@@ -74,9 +74,9 @@ export default function Sidebar() {
         </Link>
 
         <Link
-          href="/session"
+          href="/project"
           className={`${styles.item} ${
-            isActive("/session") ? styles.active : ""
+            isActive("/project") ? styles.active : ""
           }`}
         >
           <Folder size={20} />
