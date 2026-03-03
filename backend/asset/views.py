@@ -92,7 +92,7 @@ def session_assets(request):
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_video(request, video_id):
-    video = get_object_or_404(Video, id=video_id, session__user=request.user)
+    video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
     video.delete()
     return Response(
         {"message": "Video deleted successfully"}, status=status.HTTP_204_NO_CONTENT
@@ -102,7 +102,7 @@ def delete_video(request, video_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def watch_video(request, video_id):
-    video = get_object_or_404(Video, id=video_id, session__user=request.user)
+    video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
 
     if not video.video_file:
         raise Http404("Video file not found")

@@ -10,6 +10,7 @@ import { fetchCurrentTasks, fetchFinishedTasks } from "@/app/services/project";
 import styles from "./page.module.css";
 import Image from "next/image";
 import { Eye, Trash2, Play, Star, Download } from "lucide-react";
+import SharePopUpVideo from "@/components/SharePopUp_Video";
 
 const getCoverUrl = (cover: string | null) => {
   if (!cover) return "/default-cover.jpg";
@@ -23,6 +24,9 @@ export default function ProjectPage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<any | null>(null);
 
   const { data: currentData } = useQuery({
     queryKey: ["currentTasks"],
@@ -47,6 +51,12 @@ export default function ProjectPage() {
       queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
     },
   });
+
+  const handleWatchVideo = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    setSelectedVideo(item);
+    setShowVideoModal(true);
+  };
 
   const isDeleting = deleteMutation.isPending;
 
@@ -284,10 +294,7 @@ export default function ProjectPage() {
             <div className={styles.actions}>
               <button
                 className={styles.watchBtn}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/project/${item.session_id}`);
-                }}
+                onClick={(e) => handleWatchVideo(e, item)}
               >
                 <Play size={18} /> Watch The Video
               </button>
@@ -334,6 +341,15 @@ export default function ProjectPage() {
           }
         />
       )}
+
+      <SharePopUpVideo
+        isOpen={showVideoModal}
+        onClose={() => {
+          setShowVideoModal(false);
+          setSelectedVideo(null);
+        }}
+        videoData={selectedVideo}
+      />
     </div>
   );
 }
