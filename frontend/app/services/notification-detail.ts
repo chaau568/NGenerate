@@ -2,9 +2,11 @@ import { clientFetch } from "@/lib/client-fetch";
 
 export type ProcessingStepStatus =
     | "pending"
-    | "processing"
-    | "success"
-    | "failed";
+    | "analyzed"
+    | "analyzing"
+    | "generated"
+    | "generating"
+    | "fail";
 
 export type ProcessingStep = {
     id: number;

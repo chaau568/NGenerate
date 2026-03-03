@@ -62,3 +62,23 @@ class Notification(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+        
+    def get_effective_status(self):
+        if not self.session:
+            return self.status
+
+        steps = self.session.processing_steps.all()
+
+        if not steps.exists():
+            return "processing"
+
+        if steps.filter(status="failed").exists():
+            return "error"
+
+        if steps.filter(status="processing").exists():
+            return "processing"
+
+        if steps.filter(status="pending").exists():
+            return "processing"
+
+        return "success"

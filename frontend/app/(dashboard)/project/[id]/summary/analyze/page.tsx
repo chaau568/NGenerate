@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
+import SharePopUp_Action from "@/components/SharePopUp_Action";
 import { ChevronLeft, Trash2, Plus, Star } from "lucide-react";
 import { useState, useEffect } from "react";
 import styles from "./page.module.css";
@@ -37,6 +38,11 @@ export default function AnalyzeSummaryPage() {
   const [originalName, setOriginalName] = useState("");
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [nameChanged, setNameChanged] = useState(false);
+
+  const [popup, setPopup] = useState<{
+    type: "success" | "error" | null;
+    message?: string;
+  }>({ type: null });
 
   const { data, isLoading, refetch } = useQuery<AnalyzeResponse>({
     queryKey: ["analyzeSummary", sessionId],
@@ -90,6 +96,33 @@ export default function AnalyzeSummaryPage() {
     setSessionName(originalName);
     setNameChanged(false);
   };
+
+  const analyzeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await clientFetch(`/api/project/${sessionId}/analyze`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || "Analyze failed");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      setPopup({
+        type: "success",
+        message: "Your analysis has started successfully.",
+      });
+    },
+    onError: (error: any) => {
+      setPopup({
+        type: "error",
+        message: error.message || "Something went wrong.",
+      });
+    },
+  });
 
   if (isLoading || !data)
     return <div className={styles.loading}>Loading summary...</div>;
@@ -150,9 +183,9 @@ export default function AnalyzeSummaryPage() {
               Selected Chapters{" "}
               <span className={styles.countBadge}>{chapters.length}</span>
             </h2>
-            <button className={styles.addChapterBtn}>
+            {/* <button className={styles.addChapterBtn}>
               <Plus size={16} /> Add New Chapter
-            </button>
+            </button> */}
           </div>
 
           <div className={styles.chapterList}>
@@ -202,10 +235,19 @@ export default function AnalyzeSummaryPage() {
 
           <button
             className={styles.analyzeBtn}
-            disabled={notEnoughCredit || editMutation.isPending}
+            disabled={
+              notEnoughCredit ||
+              editMutation.isPending ||
+              analyzeMutation.isPending
+            }
+            onClick={() => analyzeMutation.mutate()}
           >
             <Star size={20} fill="currentColor" />
-            <span>Analyze ({summary.total_credit_required} Credits)</span>
+            <span>
+              {analyzeMutation.isPending
+                ? "Starting..."
+                : `Analyze (${summary.total_credit_required} Credits)`}
+            </span>
           </button>
           {notEnoughCredit && (
             <p className={styles.warning}>
@@ -214,6 +256,29 @@ export default function AnalyzeSummaryPage() {
           )}
         </div>
       </div>
+      {popup.type && (
+        <SharePopUp_Action
+          isOpen={true}
+          type={popup.type}
+          title={
+            popup.type === "success" ? "Analysis Started" : "Analysis Failed"
+          }
+          description={popup.message}
+          primaryText={
+            popup.type === "success" ? "Go to Projects" : "Try Again"
+          }
+          secondaryText={popup.type === "error" ? "Close" : undefined}
+          onPrimary={() => {
+            if (popup.type === "success") {
+              router.push("/project");
+            } else {
+              setPopup({ type: null });
+            }
+          }}
+          onSecondary={() => setPopup({ type: null })}
+          onClose={() => setPopup({ type: null })}
+        />
+      )}
     </div>
   );
 }

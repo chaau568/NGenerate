@@ -12,7 +12,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import SharePopUpDelete from "@/components/SharePopUp_Delete";
-import SharePopUpSuccess from "@/components/SharePopUp_Success";
+import SharePopUpAction from "@/components/SharePopUp_Action";
 import styles from "./page.module.css";
 import Image from "next/image";
 
@@ -56,6 +56,11 @@ export default function NovelDetailPage() {
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const [isCreating, setIsCreating] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [showFailedModal, setShowFailedModal] = useState(false);
+  const [createdSessionId, setCreatedSessionId] = useState<number | null>(null);
+
   useEffect(() => {
     if (!id) return;
 
@@ -81,6 +86,36 @@ export default function NovelDetailPage() {
 
     loadNovel();
   }, [id]);
+
+  const handleAnalyze = async () => {
+    if (selectedChapters.length === 0) return;
+
+    setIsCreating(true);
+
+    try {
+      const res = await clientFetch(`/api/project/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapter_ids: selectedChapters,
+          session_type: "analysis",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.detail || "Failed to create session");
+      }
+
+      setCreatedSessionId(data.id || data.session_id);
+      setShowSessionModal(true);
+    } catch (err) {
+      setShowFailedModal(true);
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -114,7 +149,7 @@ export default function NovelDetailPage() {
       }, 5000);
     }
 
-    return () => clearTimeout(timer); 
+    return () => clearTimeout(timer);
   }, [showSuccessModal]);
 
   const handleAddChapter = async (e: React.FormEvent) => {
@@ -214,8 +249,8 @@ export default function NovelDetailPage() {
             <div
               key={chap.id}
               className={styles.chapterRow}
-              onClick={() => goToChapter(chap.id)} // คลิกทั้งแถวเพื่อไปหน้า Detail
-              style={{ cursor: "pointer" }} // ทำให้รู้ว่าคลิกได้
+              onClick={() => goToChapter(chap.id)}
+              style={{ cursor: "pointer" }}
             >
               {/* 1. ปุ่มติ๊กเลือก (ซ้ายสุด) */}
               <input
@@ -277,9 +312,12 @@ export default function NovelDetailPage() {
 
           <button
             className={styles.analyzeBtn}
-            disabled={selectedChapters.length === 0}
+            disabled={selectedChapters.length === 0 || isCreating}
+            onClick={handleAnalyze}
           >
-            Analyze ({selectedChapters.length} selected)
+            {isCreating
+              ? "Creating..."
+              : `Analyze (${selectedChapters.length} selected)`}
           </button>
         </aside>
       </div>
@@ -380,10 +418,44 @@ export default function NovelDetailPage() {
           </div>
         </div>
       )}
-      <SharePopUpSuccess
+      {/* Success - Create Chapter */}
+      <SharePopUpAction
         isOpen={showSuccessModal}
-        onClose={handleSuccessClose}
+        type="success"
         title="Upload Success!"
+        primaryText="Done"
+        onPrimary={handleSuccessClose}
+        onClose={() => setShowSuccessModal(false)}
+      />
+
+      {/* Success - Create Session */}
+      <SharePopUpAction
+        isOpen={showSessionModal}
+        type="success"
+        title="Project Created Successfully!"
+        description="Your analysis session is ready."
+        primaryText="Go to Project"
+        secondaryText="Close"
+        onPrimary={() => {
+          if (createdSessionId) {
+            router.push(`/project/${createdSessionId}/summary/analyze`);
+          }
+        }}
+        onSecondary={() => setShowSessionModal(false)}
+        onClose={() => setShowSessionModal(false)}
+      />
+
+      {/* Failed */}
+      <SharePopUpAction
+        isOpen={showFailedModal}
+        type="error"
+        title="Something went wrong"
+        description="Unable to create project. Please try again."
+        primaryText="Try Again"
+        secondaryText="Close"
+        onPrimary={() => setShowFailedModal(false)}
+        onSecondary={() => setShowFailedModal(false)}
+        onClose={() => setShowFailedModal(false)}
       />
     </div>
   );

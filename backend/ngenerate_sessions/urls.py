@@ -19,6 +19,7 @@ urlpatterns = [
     path("retry/<int:session_id>/", views.retry_session, name="retry-session"),
 
     # History & Detail
+    path("draft-tasks/", views.draft_tasks, name="draft-tasks"),
     path("current-tasks/", views.current_tasks, name="current-tasks"),
     path("finished-tasks/", views.finished_tasks, name="finished-tasks"),
     path("detail/<int:session_id>/", views.view_detail, name="history-detail"),

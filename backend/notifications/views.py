@@ -105,7 +105,7 @@ def notification_detail(request, notification_id):
     data = {
         "id": notification.id,
         "task_name": notification.task_name,
-        "status": notification.status,
+        "status": notification.get_effective_status(),
         "message": notification.message,
         "is_read": notification.is_read,
         "created_at": notification.created_at,

@@ -15,8 +15,6 @@ export async function POST(
         return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-
     const { res, data } = await serverFetch(
         `/session/analyze/${id}/start/`,
         {
@@ -25,7 +23,6 @@ export async function POST(
                 Authorization: `Bearer ${accessToken}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(body),
         }
     );
 

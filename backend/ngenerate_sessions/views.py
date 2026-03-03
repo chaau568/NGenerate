@@ -258,6 +258,7 @@ def start_analysis(request, session_id):
         with transaction.atomic():
             session.start_analysis()
 
+            # run_analysis_task(session.id)
             run_analysis_task.delay(session.id)
         # session.refresh_from_db()
         return Response(
@@ -382,6 +383,27 @@ def start_generation(request, session_id):
 # =====================================================
 # HISTORY
 # =====================================================
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def draft_tasks(request):
+    sessions = (
+        Session.objects.filter(novel__user=request.user, status="draft")
+        .select_related("novel")
+        .order_by("-created_at")
+    )
+
+    draft_tasks = []
+
+    for s in sessions:
+        draft_tasks.append(
+            {
+                "session_id": s.id,
+            }
+        )
+
+    return Response({"draft_tasks": draft_tasks}, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

@@ -6,7 +6,7 @@ from novels.services.data_preprocessing import DataPreprocessing
 from notifications.models import Notification
 
 
-@shared_task(bind=True)
+@shared_task(bind=True, max_retries=3)
 def process_uploaded_file_task(self, novel_id, file_path, notification_id):
     
     notification = Notification.objects.get(id=notification_id)
@@ -23,10 +23,15 @@ def process_uploaded_file_task(self, novel_id, file_path, notification_id):
         if not chapters:
             raise ValueError("No content extracted")
 
-        if len(chapters) > 1:
-            novel.bulk_add_chapters(chapters)
+        if isinstance(chapters, dict):
+            novel.add_chapter(chapters["story"])
+
+        elif isinstance(chapters, list):
+            story_list = [c["story"] for c in chapters]
+            novel.bulk_add_chapters(story_list)
+
         else:
-            novel.add_chapter(chapters[0]["story"])
+            raise ValueError("Invalid chapter format")
 
         notification.status = "success"
         notification.message = "File processed successfully"
