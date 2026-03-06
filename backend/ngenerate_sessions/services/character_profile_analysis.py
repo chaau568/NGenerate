@@ -3,17 +3,18 @@ import requests
 from pathlib import Path
 from typing import Dict
 
+
 class CharacterProfileAnalysis:
     def __init__(self, ollama_url: str, llama_model: str, timeout: int):
         self.__OLLAMA_URL = ollama_url
         self.__LLAMA_MODEL = llama_model
         self.__TIMEOUT = timeout
-        
+
     def validate_and_clean_generic(self, data: Dict) -> Dict:
         profiles = data.get("character_profile", [])
         if not profiles:
             return {"character_profile": []}
-        
+
         unique_profiles = []
         seen_names = set()
 
@@ -30,7 +31,7 @@ class CharacterProfileAnalysis:
                 char["sex"] = str(char.get("sex", "man")).lower()
                 if char["sex"] not in VALID_SEXES:
                     char["sex"] = "man"
-                
+
                 # มาตรฐาน Age
                 char["age"] = str(char.get("age", "adult")).lower()
                 if char["age"] not in VALID_AGES:
@@ -38,7 +39,7 @@ class CharacterProfileAnalysis:
 
                 # ตรวจสอบและตั้งค่า Default ตามเงื่อนไขใหม่
                 char["appearance"] = char.get("appearance", "unknown")
-                
+
                 # เงื่อนไข: ถ้า outfit ไม่มีหรือเป็นค่าว่าง ให้ใช้ "neat outfit"
                 outfit = char.get("outfit", "").strip()
                 if not outfit or outfit.lower() == "unknown":
@@ -51,18 +52,21 @@ class CharacterProfileAnalysis:
                     char["race"] = "human"
 
                 char["base_personality"] = char.get("base_personality", "").strip()
-                if not char["base_personality"] or char["base_personality"].lower() == "unknown":
+                if (
+                    not char["base_personality"]
+                    or char["base_personality"].lower() == "unknown"
+                ):
                     char["base_personality"] = "neutral"
 
                 # ลบ field emotion ออกตามคำขอ
                 if "emotion" in char:
                     del char["emotion"]
-                
+
                 unique_profiles.append(char)
                 seen_names.add(name)
 
         return {"character_profile": unique_profiles}
-    
+
     def analyze_novel_generic(self, input_path: Path) -> Dict:
         if not input_path.exists():
             print(f"❌ Error: File not found at {input_path}")
@@ -98,7 +102,7 @@ class CharacterProfileAnalysis:
         10. Do NOT copy placeholder values. Generate real data from the story.
 
         Story Content:
-        \"\"\"{story_text[:10000]}\"\"\"
+        \"\"\"{story_text}\"\"\"
 
         Output JSON Schema:
         {{
@@ -121,31 +125,25 @@ class CharacterProfileAnalysis:
             "prompt": prompt,
             "format": "json",
             "stream": False,
-            "options": {
-                "temperature": 0.1,
-                "top_p": 0.9
-            }
+            "options": {"temperature": 0.1, "top_p": 0.9},
         }
 
         try:
-            response = requests.post(self.__OLLAMA_URL, json=payload, timeout=self.__TIMEOUT)
+            response = requests.post(
+                self.__OLLAMA_URL, json=payload, timeout=self.__TIMEOUT
+            )
             response.raise_for_status()
             raw_data = json.loads(response.json().get("response", "{}"))
-            
+
             return self.validate_and_clean_generic(raw_data)
-            
+
         except Exception as e:
             print(f"❌ API Error: {e}")
             return {}
-        
-    def run(self, story_text: str, existing_profiles: list = None) -> Dict:
+
+    def run(self, story_text: str) -> Dict:
 
         print("🚀 Starting character analysis...")
-
-        existing_context = ""
-
-        if existing_profiles:
-            existing_context = json.dumps(existing_profiles, ensure_ascii=False)
 
         prompt = f"""
         You are a strict JSON extraction system.
@@ -157,9 +155,6 @@ class CharacterProfileAnalysis:
         If a character already exists in the Existing Character Profiles,
         update their information only if new details appear.
         Do NOT duplicate characters.
-        
-        Existing Character Profiles:
-        {existing_context}
 
         Task:
         Extract ALL characters appearing in the story.
@@ -168,7 +163,11 @@ class CharacterProfileAnalysis:
         Strict Rules:
         1. "name" MUST be exactly the character name from the novel (Thai only).
         2. All other fields MUST be written in English only.
-        3. "appearance" = physical traits only (hair, eyes, body, face).
+        3. "appearance" MUST be extracted strictly from the story.
+        - Use only physical traits explicitly described.
+        - Do NOT invent details.
+        - Do NOT use vague words like "average", "normal", "good-looking".
+        - If no physical characteristics are specified, describe them within the context of the story.
         4. "outfit" = clothing description. If missing, use "neat outfit".
         5. "sex" MUST be only "man" or "woman".
         6. "age" MUST be one of: child, teen, adult, middle-aged, elder
@@ -176,10 +175,11 @@ class CharacterProfileAnalysis:
         8. "base_personality" MUST be a short English trait (calm, brave, cruel).
         9. DO NOT include "emotion".
         10. Do NOT copy placeholder values. Generate real data from the story.
-        11. If a character exists, merge new info carefully.
+        11. NEVER use generic placeholder words such as:
+        "average", "normal", "typical", "good-looking".
         
         Story Content:
-        \"\"\"{story_text[:12000]}\"\"\"
+        \"\"\"{story_text}\"\"\"
 
         Output JSON Schema:
         {{
@@ -202,17 +202,12 @@ class CharacterProfileAnalysis:
             "prompt": prompt,
             "format": "json",
             "stream": False,
-            "options": {
-                "temperature": 0.3,
-                "top_p": 0.9
-            }
+            "options": {"temperature": 0.3, "top_p": 0.9},
         }
 
         try:
             response = requests.post(
-                self.__OLLAMA_URL,
-                json=payload,
-                timeout=self.__TIMEOUT
+                self.__OLLAMA_URL, json=payload, timeout=self.__TIMEOUT
             )
             response.raise_for_status()
 

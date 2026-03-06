@@ -193,9 +193,6 @@ SYSTEM_EMAIL_DOMAIN = env("SYSTEM_EMAIL_DOMAIN", default="no-email.ngenerate.loc
 # -------------------------------------------------
 import os
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ['json']
@@ -206,7 +203,7 @@ CELERY_TASK_SERIALIZER = 'json'
 # -------------------------------------------------
 OLLAMA_URL=env("OLLAMA_URL")
 LLAMA_MODEL=env("LLAMA_MODEL")
-TIMEOUT=int(env("TIMEOUT", default=900))
+LLAMA_TIMEOUT=int(env("TIMEOUT", default=3600))
 
 POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')
 
@@ -229,3 +226,91 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-requested-with",
 ]
+
+# -------------------------------------------------
+# STORAGE CONFIG
+# -------------------------------------------------
+
+ENVIRONMENT = env("ENVIRONMENT", default="local")
+
+RUNPOD_STORAGE_ROOT = env("RUNPOD_STORAGE_ROOT", default="/workspace/ngenerate")
+LOCAL_STORAGE_ROOT = env("LOCAL_STORAGE_ROOT", default=str(BASE_DIR / "storage"))
+
+if ENVIRONMENT == "production":
+    STORAGE_ROOT = RUNPOD_STORAGE_ROOT
+else:
+    STORAGE_ROOT = LOCAL_STORAGE_ROOT
+
+# -------------------------------------------------
+# CORE STORAGE PATHS
+# -------------------------------------------------
+
+ASSET_ROOT = os.path.join(STORAGE_ROOT, env("ASSET_ROOT", default="assets"))
+USER_DATA_ROOT = os.path.join(STORAGE_ROOT, env("USER_DATA_ROOT", default="user_data"))
+MODEL_ROOT = os.path.join(STORAGE_ROOT, env("MODEL_ROOT", default="models"))
+
+# -------------------------------------------------
+# ASSET PATH
+# -------------------------------------------------
+
+MASTER_VOICE_ROOT = os.path.join(
+    ASSET_ROOT,
+    env("MASTER_VOICE_DIR", default="master_voice")
+)
+
+DEFAULT_ASSET_ROOT = os.path.join(
+    ASSET_ROOT,
+    env("DEFAULT_ASSET_DIR", default="default")
+)
+
+# -------------------------------------------------
+# DEFAULT ASSETS
+# -------------------------------------------------
+
+DEFAULT_NOVEL_COVER = os.path.join(
+    DEFAULT_ASSET_ROOT,
+    "default_cover.jpg"
+)
+
+DEFAULT_AVATAR = os.path.join(
+    DEFAULT_ASSET_ROOT,
+    "default_avatar.jpg"
+)
+
+os.makedirs(STORAGE_ROOT, exist_ok=True)
+os.makedirs(ASSET_ROOT, exist_ok=True)
+os.makedirs(USER_DATA_ROOT, exist_ok=True)
+os.makedirs(MODEL_ROOT, exist_ok=True)
+
+# -------------------------------------------------
+# MODEL PATH
+# -------------------------------------------------
+
+TTS_MODEL_ROOT = os.path.join(
+    MODEL_ROOT,
+    env("TTS_MODEL_DIR", default="tts")
+)
+
+LLM_MODEL_ROOT = os.path.join(
+    MODEL_ROOT,
+    env("LLM_MODEL_DIR", default="llm")
+)
+
+SD_MODEL_ROOT = os.path.join(
+    MODEL_ROOT,
+    env("SD_MODEL_DIR", default="stable_diffusion")
+)
+
+RUNPOD_COMFY_URL = env("RUNPOD_COMFY_URL", default="")
+RUNPOD_TIMEOUT = env.int("RUNPOD_TIMEOUT", default=600)
+
+CHARACTER_T2I_WORKFLOW_ID = env("CHARACTER_T2I_WORKFLOW_ID", default="")
+CHARACTER_REF_WORKFLOW_ID = env("CHARACTER_REF_WORKFLOW_ID", default="")
+SCENE_T2I_WORKFLOW_ID = env("SCENE_T2I_WORKFLOW_ID", default="")
+
+# -------------------------------------------------
+# MEDIA (Django)
+# -------------------------------------------------
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = USER_DATA_ROOT

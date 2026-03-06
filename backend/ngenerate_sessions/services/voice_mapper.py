@@ -1,26 +1,20 @@
 class VoiceMapper:
 
-    @staticmethod
-    def generate_voice_key(sex, age, emotion, tone="tone1"):
-        """
-        Create master voice id
-        Example: male_adult_happy_tone2
-        """
+    VALID_EMOTIONS = {"neutral", "happy", "sad", "angry", "serious"}
 
-        return f"{sex}_{age}_{emotion}_{tone}"
+    DEFAULT_VOICE = "man1"
 
     @staticmethod
     def map_from_profile(profile, sentence):
-        """
-        profile -> Character profile
-        sentence -> Sentence model
-        """
 
-        sex = profile.sex
-        age = profile.age
-        emotion = sentence.emotion or "neutral"
+        voice_type = getattr(profile, "voice_type", None)
 
-        # optional random tone
-        tone = "tone1"
+        if not voice_type:
+            voice_type = VoiceMapper.DEFAULT_VOICE
 
-        return VoiceMapper.generate_voice_key(sex, age, emotion, tone)
+        emotion = (sentence.emotion or "neutral").lower()
+
+        if emotion not in VoiceMapper.VALID_EMOTIONS:
+            emotion = "neutral"
+
+        return voice_type, emotion

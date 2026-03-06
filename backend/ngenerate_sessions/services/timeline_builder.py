@@ -1,79 +1,57 @@
-from ngenerate_sessions.models import Sentence, Illustration
-from asset.models import CharacterImage, CharacterVoice, IllustrationImage
+from asset.models import CharacterAsset, NarratorVoice, IllustrationImage
+from ngenerate_sessions.models import Sentence
 
 
 class TimelineBuilder:
-
     def __init__(self, session):
         self.session = session
 
     def build(self):
-
         timeline = []
-        current_time = 0.0
-
-        chapters = (
-            self.session.chapters
-            .all()
-            .order_by("id")
+        sentences = (
+            Sentence.objects.filter(session=self.session)
+            .select_related("chapter")
+            .prefetch_related("sentence_characters__character_profile")
+            .order_by("chapter__order", "sentence_index")
         )
 
-        for chapter in chapters:
-
-            # 1 scene per chapter
-            illustration = Illustration.objects.get(
+        for sentence in sentences:
+            # 1. ดึงเสียงพากย์
+            voice = NarratorVoice.objects.filter(
                 session=self.session,
-                chapter=chapter
-            )
+                sentence=sentence,
+            ).first()
 
-            scene_image = IllustrationImage.objects.get(
+            if not voice:
+                continue
+
+            # 2. ดึงฉากหลัง (Scene) ของ Chapter นี้
+            scene = IllustrationImage.objects.filter(
                 session=self.session,
-                illustration=illustration
-            )
+                illustration__chapter=sentence.chapter,
+            ).first()
 
-            sentences = (
-                Sentence.objects
-                .filter(session=self.session, chapter=chapter)
-                .order_by("sentence_index")
-            )
-
-            active_character_image = None
-
-            for sentence in sentences:
-
-                voice = CharacterVoice.objects.filter(
+            # 3. ดึงภาพตัวละครที่อยู่ในประโยคนี้ (ตาม Emotion ของประโยค)
+            character_overlays = []
+            for sc in sentence.sentence_characters.all():
+                char_image = CharacterAsset.objects.filter(
                     session=self.session,
-                    sentence=sentence
+                    character__chapter=sentence.chapter,
+                    character__character_profile=sc.character_profile,
+                    character__emotion=sentence.emotion,
                 ).first()
 
-                duration = voice.duration if voice else 2.0
+                if char_image:
+                    character_overlays.append(char_image.image.path)
 
-                character_image = None
-
-                if sentence.type == "dialogue" and sentence.character:
-
-                    char_img = CharacterImage.objects.get(
-                        session=self.session,
-                        character=sentence.character
-                    )
-
-                    character_image = char_img.image.url
-                    active_character_image = character_image
-
-                elif sentence.type == "narration":
-                    character_image = None
-
-                else:
-                    character_image = active_character_image
-
-                timeline.append({
-                    "start": current_time,
-                    "end": current_time + duration,
-                    "background": scene_image.image.url,
-                    "character_overlay": character_image,
-                    "audio": voice.voice.url if voice else None,
-                })
-
-                current_time += duration
+            timeline.append(
+                {
+                    "scene_path": scene.image.path if scene else None,
+                    "character_paths": character_overlays,  
+                    "audio_path": voice.voice.path,
+                    "duration": voice.duration,
+                    "subtitle": sentence.sentence,
+                }
+            )
 
         return timeline

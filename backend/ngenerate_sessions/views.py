@@ -10,11 +10,10 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
-from .models import Session
+from .models import Session, Character
 from novels.models import Novel, Chapter
 from users.models import UserCredit
 from payments.models import CreditLog
-from notifications.models import Notification
 
 from .tasks import run_analysis_task, run_generation_task
 
@@ -56,6 +55,7 @@ def create_session(request, novel_id):
     chapter_ids = request.data.get("chapter_ids", [])
     session_type = request.data.get("session_type", "analysis")
     name = request.data.get("name")
+    style = request.data.get("style", "ghibli")
 
     if session_type not in dict(Session.SESSION_TYPE_CHOICES):
         return Response(
@@ -65,6 +65,12 @@ def create_session(request, novel_id):
     if not chapter_ids:
         return Response(
             {"error": "At least one chapter is required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if style not in dict(Session.STYLE_CHOICES):
+        return Response(
+            {"error": "Invalid style"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -78,7 +84,10 @@ def create_session(request, novel_id):
     with transaction.atomic():
 
         session = Session.objects.create(
-            novel=novel, session_type=session_type, name=name or ""
+            novel=novel,
+            session_type=session_type,
+            name=name or "",
+            style=style,
         )
 
         session.chapters.set(chapters)
@@ -132,7 +141,7 @@ def summary_analyze(request, session_id):
     chapters = session.chapters.order_by("order")
     total_chapters = chapters.count()
     required_credit = session.calculate_analysis_credit()
-    wallet = UserCredit.objects.get(user=request.user)
+    wallet, _ = UserCredit.objects.get_or_create(user=request.user)
 
     return Response(
         {
@@ -249,18 +258,16 @@ def edit_session(request, session_id):
 def start_analysis(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    if session.status == "analyzing":
+    if session.status not in ["draft", "failed"]:
         return Response(
-            {"error": "Analysis already running"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Session must be in draft or failed state"}, status=400
         )
 
     try:
         with transaction.atomic():
             session.start_analysis()
+            transaction.on_commit(lambda: run_analysis_task.delay(session.id))
 
-            # run_analysis_task(session.id)
-            run_analysis_task.delay(session.id)
-        # session.refresh_from_db()
         return Response(
             {"status": session.status, "locked_credits": session.locked_credits},
             status=status.HTTP_201_CREATED,
@@ -303,17 +310,11 @@ def start_analysis(request, session_id):
 def summary_generate(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    # Must be full session
-    if session.session_type != "full":
-        return Response(
-            {"error": "This session does not allow generation"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     # Must finish analysis first
     if not session.is_analysis_done:
         return Response(
-            {"error": "Analysis not completed"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Analysis not completed"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     # Must be in analyzed state
@@ -324,7 +325,9 @@ def summary_generate(request, session_id):
         )
 
     required_credit = session.calculate_generation_credit()
-    wallet = UserCredit.objects.get(user=request.user)
+    wallet, _ = UserCredit.objects.get_or_create(user=request.user)
+
+    character_count = session.characters.count()
 
     return Response(
         {
@@ -333,7 +336,7 @@ def summary_generate(request, session_id):
             },
             "summary": {
                 "sentence_count": session.sentences.count(),
-                "character_count": session.novel.character_profiles.count(),
+                "character_count": character_count,
                 "scene_count": session.illustrations.count(),
                 "total_credit_required": required_credit,
                 "credits_remaining": wallet.available,
@@ -361,17 +364,14 @@ def summary_generate(request, session_id):
 def start_generation(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    if session.status == "generating":
-        return Response(
-            {"error": "Generation already running"}, status=status.HTTP_400_BAD_REQUEST
-        )
+    if session.status != "analyzed":
+        return Response({"error": "Session must be analyzed first"}, status=400)
 
     try:
         with transaction.atomic():
             session.start_generation()
+            transaction.on_commit(lambda: run_generation_task.delay(session.id))
 
-            run_generation_task.delay(session.id)
-        # session.refresh_from_db()
         return Response(
             {"status": session.status, "locked_credits": session.locked_credits},
             status=status.HTTP_201_CREATED,
@@ -442,7 +442,7 @@ def current_tasks(request):
 def finished_tasks(request):
     sessions = (
         Session.objects.filter(
-            novel__user=request.user, status__in=["analyzed", "generated"]
+            novel__user=request.user, status__in=["analyzed", "generated", "failed"]
         )
         .select_related("novel")
         .prefetch_related("videos")
@@ -451,6 +451,7 @@ def finished_tasks(request):
 
     analysis_history = []
     generation_history = []
+    failed_history = []
 
     for s in sessions:
         latest_video = s.videos.order_by("-version").first()
@@ -484,10 +485,14 @@ def finished_tasks(request):
                 }
             )
 
+        elif s.status == "failed":
+            failed_history.append(base_data)
+
     return Response(
         {
             "analysis_history": analysis_history,
             "generation_history": generation_history,
+            "failed_history": failed_history,
         },
         status=status.HTTP_200_OK,
     )
@@ -499,7 +504,7 @@ def finished_tasks(request):
 def delete_session(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
     session.delete()
-    return Response({"message": "Session deleted"}, status=status.HTTP_204_NO_CONTENT)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # =====================================================
@@ -612,37 +617,42 @@ def transaction_history(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def retry_session(request, session_id):
-
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
     if session.status != "failed":
-        return Response(
-            {"error": "Only failed sessions can retry"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response({"error": "Only failed sessions can retry"}, status=400)
 
-    # ----------------------------------
-    # CLEAR SESSION DATA
-    # ----------------------------------
+    with transaction.atomic():
+        session.processing_steps.all().delete()
 
-    session.sentences.all().delete()
-    session.illustrations.all().delete()
-    session.processing_steps.all().delete()
+        if not session.is_analysis_done:
+            session.sentences.all().delete()
+            session.characters.all().delete()
+            session.illustrations.all().delete()
 
-    session.status = "draft"
-    session.error_message = None
-    session.locked_credits = 0
-    session.save()
+            session.status = "draft"
+            session.locked_credits = 0
+            session.save()
 
-    # ----------------------------------
-    # RESTART
-    # ----------------------------------
+            session.start_analysis()
+            transaction.on_commit(lambda: run_analysis_task.delay(session.id))
+            message = (
+                "Analysis failed. Cleared all data and assets, restarting analysis."
+            )
 
-    if not session.is_analysis_done:
-        session.start_analysis()
-        run_analysis_task.delay(session.id)
-    else:
-        session.start_generation()
-        run_generation_task.delay(session.id)
+        else:
+            session.videos.all().delete()
 
-    return Response({"message": "Retry started", "status": session.status})
+            session.character_assets.all().delete()
+            session.voices.all().delete()
+            session.scene_images.all().delete()
+
+            session.status = "analyzed"
+            session.locked_credits = 0
+            session.save()
+
+            session.start_generation()
+            transaction.on_commit(lambda: run_generation_task.delay(session.id))
+            message = "Generation failed. Kept analysis results but cleared generation assets, restarting."
+
+    return Response({"message": message, "status": session.status})

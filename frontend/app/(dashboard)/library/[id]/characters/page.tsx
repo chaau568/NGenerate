@@ -17,7 +17,6 @@ interface CharacterProfile {
   race: string;
   base_personality: string;
   master_image_path: string | null;
-  master_voice_path: string | null;
 }
 
 export default function CharacterListPage({
@@ -107,15 +106,6 @@ export default function CharacterListPage({
                     <strong>Appearance:</strong> {char.appearance || "N/A"}
                   </p>
                 </div>
-                {char.master_voice_path && (
-                  <div className={styles.audioWrapper}>
-                    <audio
-                      controls
-                      src={getVoiceUrl(char.master_voice_path)}
-                      className={styles.audioPlayer}
-                    />
-                  </div>
-                )}
               </div>
             </div>
           ))

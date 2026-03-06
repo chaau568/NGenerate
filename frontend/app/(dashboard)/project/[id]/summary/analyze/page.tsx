@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
 import SharePopUp_Action from "@/components/SharePopUp_Action";
 import { ChevronLeft, Trash2, Plus, Star } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import styles from "./page.module.css";
 
 interface Chapter {
@@ -39,6 +39,11 @@ export default function AnalyzeSummaryPage() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [nameChanged, setNameChanged] = useState(false);
 
+  const [analysisStarted, setAnalysisStarted] = useState(false);
+
+  const analysisStartedRef = useRef(false);
+  const statusRef = useRef<string | null>(null);
+
   const [popup, setPopup] = useState<{
     type: "success" | "error" | null;
     message?: string;
@@ -60,8 +65,25 @@ export default function AnalyzeSummaryPage() {
       setSessionName(data.details.session_name);
       setOriginalName(data.details.session_name);
       setChapters(data.details.chapters);
+
+      statusRef.current = data.status;
     }
   }, [data]);
+
+  useEffect(() => {
+    analysisStartedRef.current = analysisStarted;
+  }, [analysisStarted]);
+
+  useEffect(() => {
+    return () => {
+      if (statusRef.current === "draft" && !analysisStartedRef.current) {
+        fetch(`/api/project/${sessionId}`, {
+          method: "DELETE",
+          keepalive: true,
+        });
+      }
+    };
+  }, [sessionId]);
 
   const editMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -111,6 +133,7 @@ export default function AnalyzeSummaryPage() {
       return res.json();
     },
     onSuccess: () => {
+      setAnalysisStarted(true);
       setPopup({
         type: "success",
         message: "Your analysis has started successfully.",

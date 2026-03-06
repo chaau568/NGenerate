@@ -1,6 +1,7 @@
 import json
 import requests
 
+
 class GenerateCharacterPrompt:
     def __init__(self, ollama_url: str, llama_model: str, timeout: int):
         self.__OLLAMA_URL = ollama_url
@@ -8,28 +9,37 @@ class GenerateCharacterPrompt:
         self.__TIMEOUT = timeout
         self.__FIXED_CHAR_NEGATIVE = "score_6, score_5, score_4, (low quality, worst quality:1.4), bad anatomy, 3d, realistic, masterpiece, ultra detailed, text, watermark, logo, background scenery"
 
-    def generate_prompt(self, character_profile_data: dict, mode: str, style: str) -> dict:
+    def generate_prompt(
+        self, character_profile_data: dict, mode: str, style: str, emotion: str = None
+    ) -> dict:
         style_guidance = {
             "Chinese": "traditional Chinese hanfu, ornate embroidery, silk robes, ancient eastern accessories, studio ghibli inspired details",
             "Japanese": "kimono, yukata, samurai armor elements, traditional japanese patterns, kanzashi, retro anime feel",
             "Futuristic": "cyberpunk techwear, glowing neon accents, sleek metallic fabrics, tactical gear, sci-fi bodysuit, clean anime lines",
             "Medieval": "tunic, leather boots, iron armor parts, cloak, fantasy medieval attire, hand-painted textures",
             "Modern": "contemporary streetwear, casual hoodie, denim, sneakers, minimalist fashion, soft cinematic lighting",
-            "Ghibli": "studio ghibli character design, simple and elegant attire, flowing fabrics, hand-drawn anime aesthetic, vintage anime colors, soft shaded clothing"
+            "Ghibli": "studio ghibli character design, simple and elegant attire, flowing fabrics, hand-drawn anime aesthetic, vintage anime colors, soft shaded clothing",
         }
-        
-        ALLOWED_STYLE = {"chinese", "japanese", "futuristic", "medieval", "modern", "ghibli"}
-        
+
+        ALLOWED_STYLE = {
+            "chinese",
+            "japanese",
+            "futuristic",
+            "medieval",
+            "modern",
+            "ghibli",
+        }
+
         if style not in ALLOWED_STYLE:
             style = "ghibli"
-        
+
         style_details = style_guidance.get(style, f"{style} fashion and elements")
-        
+
         ALLOWED_MODES = {"text-to-image", "image-to-image"}
 
         if mode not in ALLOWED_MODES:
             mode = "text-to-image"
-        
+
         if mode == "text-to-image":
             instruction = f"""
             Role: Professional AI Prompt Engineer for Pony Diffusion V6 XL.
@@ -58,12 +68,26 @@ class GenerateCharacterPrompt:
             9. Polish: {style} aesthetics.
             """
         else:
+            emotion_tag = emotion if emotion else "neutral"
+            
             instruction = f"""
             Task: Create an EMOTION CHANGE prompt for Pony Diffusion.
-            Focus: Change ONLY the facial expression while keeping the character consistent.
-            
-            Structure: 
-            score_9, score_8_up, score_7_up, source_anime, [new expression tags], 1girl, solo, same hairstyle, same outfit, half body, simple background, {style} aesthetics.
+
+            IMPORTANT:
+            - Keep the SAME character identity
+            - Change ONLY facial expression
+
+            Emotion: {emotion_tag}
+
+            Structure:
+            score_9, score_8_up, score_7_up, source_anime,
+            ({emotion_tag} expression),
+            1girl, solo,
+            same hairstyle,
+            same outfit,
+            half body,
+            simple background,
+            {style} aesthetics
             """
 
         prompt = f"""
@@ -82,15 +106,15 @@ class GenerateCharacterPrompt:
                     "prompt": prompt,
                     "stream": False,
                     "format": "json",
-                    "options": {
-                        "temperature": 0.3,
-                        "top_p": 0.9
-                    }
+                    "options": {"temperature": 0.3, "top_p": 0.9},
                 },
-                timeout=self.__TIMEOUT
+                timeout=self.__TIMEOUT,
             )
             result = json.loads(response.json()["response"])
             result["negative_prompt"] = self.__FIXED_CHAR_NEGATIVE
             return result
         except Exception as e:
-            return {"positive_prompt": "", "negative_prompt": self.__FIXED_CHAR_NEGATIVE}
+            return {
+                "positive_prompt": "",
+                "negative_prompt": self.__FIXED_CHAR_NEGATIVE,
+            }

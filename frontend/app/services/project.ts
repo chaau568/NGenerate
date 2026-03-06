@@ -48,9 +48,19 @@ export interface GenerationHistory {
     video_id: number;
 }
 
+export interface FailedHistory {
+    session_id: number;
+    novel_id: number;
+    session_name: string;
+    status: string;
+    created_at?: string;
+    cover: string | null;
+}
+
 export const fetchFinishedTasks = async (): Promise<{
     analysis_history: AnalysisHistory[];
     generation_history: GenerationHistory[];
+    failed_history: FailedHistory[];
 }> => {
     const res = await clientFetch("/api/project?type=finished");
 

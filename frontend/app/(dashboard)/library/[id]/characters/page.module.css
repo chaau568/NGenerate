@@ -157,19 +157,6 @@
   -webkit-line-clamp: 4;
 }
 
-/* ===== AUDIO PLAYER ===== */
-.audioWrapper {
-  margin-top: auto;
-  padding-top: 12px;
-}
-
-.audioPlayer {
-  width: 100%;
-  height: 34px;
-  background: #ffffff;
-  border-radius: 8px;
-}
-
 .empty {
   width: 100%;
   text-align: center;

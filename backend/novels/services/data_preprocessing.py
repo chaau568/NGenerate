@@ -7,6 +7,10 @@ from pdf2image import convert_from_path
 from pathlib import Path
 from pythainlp.util import normalize as thai_normalize
 
+from pythainlp.corpus.common import thai_words
+from pythainlp.tokenize import word_tokenize
+
+
 class DataPreprocessing:
     def __init__(self, poppler_path: str):
         self.__poppler_path = Path(poppler_path)
@@ -18,38 +22,72 @@ class DataPreprocessing:
         |Episode\s*\d+
         )
         """
-        self.__chapter_pattern = re.compile(self.__chapter_regex, re.VERBOSE | re.IGNORECASE)
-    
+        self.__chapter_pattern = re.compile(
+            self.__chapter_regex, re.VERBOSE | re.IGNORECASE
+        )
+        self.__thai_dict = set(thai_words())
+
+    def fix_short_u_guarded(self, text: str) -> str:
+        words = word_tokenize(text, engine="newmm")
+        fixed_words = []
+
+        for w in words:
+            if w in self.__thai_dict:
+                fixed_words.append(w)
+                continue
+
+            w = re.sub(r"([ก-ฮ])ุ([นงมกบ])", r"\1ั\2", w)
+            fixed_words.append(w)
+
+        return "".join(fixed_words)
+
     def advanced_thai_cleaner(self, text: str) -> str:
         if not text:
             return ""
 
         chars_to_fix = {
-            '\uf700': 'ั', '\uf701': 'ิ', '\uf702': 'ี', '\uf703': 'ึ', '\uf704': 'ื',
-            '\uf705': '่', '\uf706': '้', '\uf707': '๊', '\uf708': '๋', '\uf709': '์',
-            '\uf70a': '่', '\uf70b': '้', '\uf70c': '๊', '\uf70d': '๋', '\uf70e': '์',
-            '\uf710': 'ั', '\uf711': 'ู', '\uf712': 'ุ', '\uf713': 'ู', '\uf714': 'ู',
+            "\uf700": "ั",
+            "\uf701": "ิ",
+            "\uf702": "ี",
+            "\uf703": "ึ",
+            "\uf704": "ื",
+            "\uf705": "่",
+            "\uf706": "้",
+            "\uf707": "๊",
+            "\uf708": "๋",
+            "\uf709": "์",
+            "\uf70a": "่",
+            "\uf70b": "้",
+            "\uf70c": "๊",
+            "\uf70d": "๋",
+            "\uf70e": "์",
+            "\uf710": "ั",
+            "\uf711": "ู",
+            "\uf712": "ุ",
+            "\uf713": "ู",
+            "\uf714": "ู",
         }
         for wrong, right in chars_to_fix.items():
             text = text.replace(wrong, right)
-            
-        text = re.sub(r'([ก-ฮ])ุ([นงมกบ])', r'\1ั\2', text)
-        
-        text = re.sub(r'เ([ก-ฮ])ั([นงมกบ])', r'เ\1็\2', text) 
-        text = re.sub(r'เ([ก-ฮ])ุ([นงมกบ])', r'เ\1็\2', text) 
+
+        # text = re.sub(r"([ก-ฮ])ุ([นงมกบ])", r"\1ั\2", text)
+        text = self.fix_short_u_guarded(text)
+
+        text = re.sub(r"เ([ก-ฮ])ั([นงมกบ])", r"เ\1็\2", text)
+        text = re.sub(r"เ([ก-ฮ])ุ([นงมกบ])", r"เ\1็\2", text)
 
         text = thai_normalize(text)
-        text = unicodedata.normalize('NFKC', text)
+        text = unicodedata.normalize("NFKC", text)
 
-        text = "".join(ch for ch in text if unicodedata.category(ch)[0] != 'C')
+        text = "".join(ch for ch in text if unicodedata.category(ch)[0] != "C")
 
         return " ".join(text.split())
-    
+
     def is_text_readable(self, text: str) -> bool:
         if not text.strip():
             return False
-        
-        thai_standard_chars = re.findall(r'[ก-๙]', text)
+
+        thai_standard_chars = re.findall(r"[ก-๙]", text)
 
         if len(thai_standard_chars) > 10 or len(text.strip()) > 50:
             return True
@@ -60,9 +98,9 @@ class DataPreprocessing:
             first_page_sample = doc[0].get_text()
             text_len = len(first_page_sample.strip())
             is_readable = self.is_text_readable(first_page_sample)
-            
+
             print(f"DEBUG: Length={text_len}, Readable={is_readable}")
-            
+
             if text_len > 20 and is_readable:
                 print("✅ Quality Check Passed: Using PyMuPDF (Cleaned)")
                 full_text = ""
@@ -73,7 +111,7 @@ class DataPreprocessing:
             else:
                 print("⚠️ Quality Check Failed or Scanned PDF: Switching to EasyOCR")
                 return self.ocr_extraction(pdf_path)
-    
+
     def ocr_extraction(self, pdf_path: Path) -> str:
         images = convert_from_path(pdf_path, dpi=300, poppler_path=self.__poppler_path)
         full_text = ""
@@ -96,12 +134,7 @@ class DataPreprocessing:
         chapters = []
 
         if not matches:
-            return [
-                {
-                    "order": 1,
-                    "story": text.strip()
-                }
-            ]
+            return [{"order": 1, "story": text.strip()}]
 
         for i, match in enumerate(matches):
             raw_header = match.group().strip()
@@ -115,10 +148,7 @@ class DataPreprocessing:
 
             chapter_content = text[start:end].strip()
 
-            chapters.append({
-                "order": clean_num,
-                "story": chapter_content
-            })
+            chapters.append({"order": clean_num, "story": chapter_content})
 
         return chapters
 
@@ -126,9 +156,7 @@ class DataPreprocessing:
         path = Path(input_file)
 
         if path.suffix == ".txt":
-            content = self.advanced_thai_cleaner(
-                path.read_text(encoding="utf-8")
-            )
+            content = self.advanced_thai_cleaner(path.read_text(encoding="utf-8"))
 
         elif path.suffix == ".pdf":
             content = self.extract_text_from_pdf(path)

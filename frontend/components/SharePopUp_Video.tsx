@@ -29,11 +29,6 @@ export default function SharePopUpVideo({
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        {/* ปุ่ม X ขวาสุดแบบเล็ก */}
-        <button className={styles.closeBtn} onClick={onClose} title="Close">
-          <X size={16} />
-        </button>
-
         {/* Header */}
         <div className={styles.modalHeader}>
           <div className={styles.headerLeft}>
@@ -45,6 +40,11 @@ export default function SharePopUpVideo({
               <p>version {videoData.version}</p>
             </div>
           </div>
+
+          {/* ปุ่ม X ขวาสุด */}
+          <button className={styles.closeBtn} onClick={onClose} title="Close">
+            <X size={16} />
+          </button>
         </div>
 
         {/* Video Player */}

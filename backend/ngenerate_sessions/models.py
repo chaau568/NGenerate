@@ -7,54 +7,50 @@ from payments.models import CreditLog
 from notifications.models import Notification
 from .pricing import CreditPricing
 
+from django.conf import settings
+
+
 class Session(models.Model):
 
     SESSION_TYPE_CHOICES = (
-        ('analysis', 'Analysis Only'),
-        ('full', 'Analysis + Generation'),
+        ("analysis", "Analysis Only"),
+        ("full", "Analysis + Generation"),
     )
 
     STATUS_CHOICES = (
-        ('draft', 'Draft'),
-        ('analyzing', 'Analyzing'),
-        ('analyzed', 'Analyzed'),
-        ('generating', 'Generating'),
-        ('generated', 'Generated'),
-        ('failed', 'Failed'),
+        ("draft", "Draft"),
+        ("analyzing", "Analyzing"),
+        ("analyzed", "Analyzed"),
+        ("generating", "Generating"),
+        ("generated", "Generated"),
+        ("failed", "Failed"),
     )
-    
+
     STYLE_CHOICES = (
-        ('chinese', 'Chinese'),
-        ('japanese', 'Japanese'),
-        ('futuristic', 'Futuristic'),
-        ('medieval', 'Medieval'),
-        ('ghibli', 'Ghibli'),
+        ("chinese", "Chinese"),
+        ("japanese", "Japanese"),
+        ("futuristic", "Futuristic"),
+        ("medieval", "Medieval"),
+        ("ghibli", "Ghibli"),
     )
 
-    novel = models.ForeignKey(
-        Novel,
-        on_delete=models.CASCADE,
-        related_name='sessions'
+    NARRATOR_VOICE_CHOICES = (
+        ("man1", "Man 1"),
+        ("man2", "Man 2"),
+        ("girl1", "Girl 1"),
     )
 
-    chapters = models.ManyToManyField(
-        Chapter,
-        related_name='sessions'
-    )
-    
+    novel = models.ForeignKey(Novel, on_delete=models.CASCADE, related_name="sessions")
+
+    chapters = models.ManyToManyField(Chapter, related_name="sessions")
+
     name = models.CharField(max_length=255, blank=True)
 
     session_type = models.CharField(
-        max_length=50,
-        choices=SESSION_TYPE_CHOICES,
-        default='analysis'
+        max_length=50, choices=SESSION_TYPE_CHOICES, default="analysis"
     )
-    
-    style = models.CharField(
-        max_length=50, 
-        choices=STYLE_CHOICES, 
-        default='ghibli'
-    )
+
+    style = models.CharField(max_length=50, choices=STYLE_CHOICES, default="ghibli")
 
     # credit tracking
     analyze_credits = models.PositiveIntegerField(default=0)
@@ -65,23 +61,23 @@ class Session(models.Model):
     is_analysis_done = models.BooleanField(default=False)
     is_generation_done = models.BooleanField(default=False)
 
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='draft'
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+
+    narrator_voice = models.CharField(
+        max_length=20, choices=NARRATOR_VOICE_CHOICES, default="man1"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
     analysis_finished_at = models.DateTimeField(null=True, blank=True)
     generation_finished_at = models.DateTimeField(null=True, blank=True)
-    
+
     def __str__(self):
         return f"{self.name} | {self.session_type} | {self.style}"
-    
+
     def save(self, *args, **kwargs):
         if not self.id and not self.name:
-            self.name = "New Session" 
-        
+            self.name = "New Session"
+
         super().save(*args, **kwargs)
 
     # =====================================================
@@ -99,8 +95,8 @@ class Session(models.Model):
         sentence_count = self.sentences.count()
         sentence_credit = CreditPricing.sentence_to_credit(sentence_count)
 
-        character_count = self.novel.character_profiles.count()
-        character_credit = character_count * CreditPricing.CHARACTER_IMAGE
+        character_image_count = self.characters.count()
+        character_credit = character_image_count * CreditPricing.CHARACTER_IMAGE
 
         scene_count = self.illustrations.count()
         scene_credit = scene_count * CreditPricing.SCENE_IMAGE
@@ -122,7 +118,7 @@ class Session(models.Model):
 
             session = Session.objects.select_for_update().get(pk=self.pk)
 
-            if session.status not in ['draft', 'failed']:
+            if session.status not in ["draft", "failed"]:
                 raise ValidationError("Cannot start analysis")
 
             if session.locked_credits > 0:
@@ -130,9 +126,7 @@ class Session(models.Model):
 
             required_credit = session.calculate_analysis_credit()
 
-            wallet = UserCredit.objects.select_for_update().get(
-                user=session.novel.user
-            )
+            wallet = UserCredit.objects.select_for_update().get(user=session.novel.user)
 
             if wallet.available < required_credit:
                 raise ValidationError("Not enough credits")
@@ -141,22 +135,22 @@ class Session(models.Model):
             wallet.save(update_fields=["available"])
 
             session.locked_credits = required_credit
-            session.status = 'analyzing'
+            session.status = "analyzing"
             session.save(update_fields=["locked_credits", "status"])
-            
+
             Notification.objects.create(
                 user=self.novel.user,
                 session=self,
                 task_name="Analysis",
-                status='processing',
-                message=f"Starting analysis for {self.name}"
+                status="processing",
+                message=f"Starting analysis for {self.name}",
             )
 
             CreditLog.objects.create(
                 user=session.novel.user,
                 session=session,
-                type='analysis_lock',
-                amount=-required_credit
+                type="analysis_lock",
+                amount=-required_credit,
             )
 
     def complete_analysis(self):
@@ -165,34 +159,35 @@ class Session(models.Model):
 
             session = Session.objects.select_for_update().get(pk=self.pk)
 
-            if session.status != 'analyzing':
-                raise ValidationError("Invalid state")
+            session.chapters.update(is_analyzed=True)
 
             CreditLog.objects.create(
                 user=session.novel.user,
                 session=session,
-                type='analysis_complete',
-                amount=0
+                type="analysis_complete",
+                amount=0,
             )
 
             session.locked_credits = 0
-            session.status = 'analyzed'
+            session.status = "analyzed"
             session.is_analysis_done = True
             session.analysis_finished_at = timezone.now()
 
-            session.save(update_fields=[
-                "locked_credits",
-                "status",
-                "is_analysis_done",
-                "analysis_finished_at"
-            ])
-            
+            session.save(
+                update_fields=[
+                    "locked_credits",
+                    "status",
+                    "is_analysis_done",
+                    "analysis_finished_at",
+                ]
+            )
+
             Notification.objects.create(
                 user=self.novel.user,
                 session=self,
                 task_name="Analysis",
-                status='success',
-                message=f"Analysis completed for {self.name}"
+                status="success",
+                message=f"Analysis completed for {self.name}",
             )
 
     # =====================================================
@@ -205,13 +200,10 @@ class Session(models.Model):
 
             session = Session.objects.select_for_update().get(pk=self.pk)
 
-            if session.session_type != 'full':
-                raise ValidationError("This session does not allow generation")
-
             if not session.is_analysis_done:
                 raise ValidationError("Analysis not completed")
 
-            if session.status != 'analyzed':
+            if session.status != "analyzed":
                 raise ValidationError("Invalid state")
 
             if session.locked_credits > 0:
@@ -219,9 +211,7 @@ class Session(models.Model):
 
             required_credit = session.calculate_generation_credit()
 
-            wallet = UserCredit.objects.select_for_update().get(
-                user=session.novel.user
-            )
+            wallet = UserCredit.objects.select_for_update().get(user=session.novel.user)
 
             if wallet.available < required_credit:
                 raise ValidationError("Not enough credits")
@@ -230,23 +220,26 @@ class Session(models.Model):
             wallet.save(update_fields=["available"])
 
             session.locked_credits = required_credit
-            session.status = 'generating'
+            session.status = "generating"
 
-            session.save(update_fields=["locked_credits", "status"])
+            if session.session_type != "full":
+                session.session_type = "full"
+
+            session.save(update_fields=["locked_credits", "status", "session_type"])
 
             CreditLog.objects.create(
                 user=session.novel.user,
                 session=session,
-                type='generation_lock',
-                amount=-required_credit
+                type="generation_lock",
+                amount=-required_credit,
             )
-            
+
             Notification.objects.create(
                 user=self.novel.user,
                 session=self,
                 task_name="Generation",
-                status='processing',
-                message=f"Starting generation for {self.name}"
+                status="processing",
+                message=f"Starting generation for {self.name}",
             )
 
     def complete_generation(self):
@@ -255,34 +248,36 @@ class Session(models.Model):
 
             session = Session.objects.select_for_update().get(pk=self.pk)
 
-            if session.status != 'generating':
+            if session.status != "generating":
                 raise ValidationError("Invalid state")
 
             CreditLog.objects.create(
                 user=session.novel.user,
                 session=session,
-                type='generation_complete',
-                amount=0
+                type="generation_complete",
+                amount=0,
             )
 
             session.locked_credits = 0
-            session.status = 'generated'
+            session.status = "generated"
             session.is_generation_done = True
             session.generation_finished_at = timezone.now()
 
-            session.save(update_fields=[
-                "locked_credits",
-                "status",
-                "is_generation_done",
-                "generation_finished_at"
-            ])
-            
+            session.save(
+                update_fields=[
+                    "locked_credits",
+                    "status",
+                    "is_generation_done",
+                    "generation_finished_at",
+                ]
+            )
+
             Notification.objects.create(
                 user=self.novel.user,
                 session=self,
                 task_name="Generation",
-                status='success',
-                message=f"Generation completed for {self.name}"
+                status="success",
+                message=f"Generation completed for {self.name}",
             )
 
     # =====================================================
@@ -307,38 +302,38 @@ class Session(models.Model):
                 CreditLog.objects.create(
                     user=session.novel.user,
                     session=session,
-                    type='refund',
-                    amount=session.locked_credits
+                    type="refund",
+                    amount=session.locked_credits,
                 )
 
             session.locked_credits = 0
-            session.status = 'failed'
+            session.status = "failed"
 
             session.save(update_fields=["locked_credits", "status"])
-            
+
             Notification.objects.create(
                 user=self.novel.user,
                 session=self,
                 task_name=f"{self.status.capitalize()} Failed",
-                status='error',
-                message=error_msg or f"An error occurred during {self.status}"
+                status="error",
+                message=error_msg or f"An error occurred during {self.status}",
             )
-            
+
     # =====================================================
     # PROGRESSING CONTROL
     # =====================================================
-            
+
     def get_progress_percentage(self):
         steps = self.processing_steps.all()
         total = steps.count()
-        
+
         if total == 0:
             return 0
-        
-        success_count = steps.filter(status='success').count()
+
+        success_count = steps.filter(status="success").count()
         progress = (success_count / total) * 100
         return round(progress)
-    
+
     def update_notification_progress(self):
 
         notification = self.notifications.filter(status="processing").last()
@@ -352,21 +347,24 @@ class Session(models.Model):
             f"{notification.task_name} in progress... {progress}% completed."
         )
         notification.save(update_fields=["message", "updated_at"])
-    
+
     def create_processing_steps(self, phase):
 
+        self.processing_steps.filter(phase=phase).delete()
+
         steps_config = {
-            'analysis': [
-                (1, 'Character Identification'),
-                (2, 'Scene Segmentation'),
-                (3, 'Sentence Structuring'),
+            "analysis": [
+                (1, "Analysis Character"),
+                (2, "Analysis Sentence"),
+                (3, "Analysis Scene"),
             ],
-            'generation': [
-                (1, 'Generating Image Prompts'),
-                (2, 'Image Creation'),
-                (3, 'Voice Synthesis'),
-                (4, 'Generating Video'),
-            ]
+            "generation": [
+                (1, "Generating Character Master Image"),
+                (2, "Generating Character Emotion Image"),
+                (3, "Generating Scene Image"),
+                (4, "Generating Narrator Voice"),
+                (5, "Composite Video"),
+            ],
         }
 
         new_steps = []
@@ -375,31 +373,24 @@ class Session(models.Model):
                 session=self,
                 phase=phase,
                 name=name,
-                defaults={'order': order, 'status': 'pending'}
+                defaults={"order": order, "status": "pending"},
             )
             new_steps.append(step)
 
         return new_steps
 
-
-    def get_next_pending_step(self, phase):
-        return self.processing_steps.filter(
-            phase=phase,
-            status='pending'
-        ).order_by('order').first()
-        
     def sync_session_status(self):
         steps = self.processing_steps.all()
 
         if not steps.exists():
             return
 
-        if steps.filter(status='failed').exists():
-            self.status = 'failed'
-            self.save(update_fields=['status'])
+        if steps.filter(status="failed").exists():
+            self.status = "failed"
+            self.save(update_fields=["status"])
             return
 
-        for phase in ['analysis', 'generation']:
+        for phase in ["analysis", "generation"]:
             phase_steps = steps.filter(phase=phase)
 
             if not phase_steps.exists():
@@ -407,37 +398,39 @@ class Session(models.Model):
 
             total = phase_steps.count()
 
-            success_count = phase_steps.filter(status='success').count()
-            processing_count = phase_steps.filter(status='processing').count()
+            success_count = phase_steps.filter(status="success").count()
+            processing_count = phase_steps.filter(status="processing").count()
 
             if success_count == total:
-                if phase == 'analysis':
-                    self.status = 'analyzed'
+                if phase == "analysis":
+                    self.status = "analyzed"
                     self.is_analysis_done = True
                     self.analysis_finished_at = timezone.now()
-                elif phase == 'generation':
-                    self.status = 'generated'
+                elif phase == "generation":
+                    self.status = "generated"
                     self.is_generation_done = True
                     self.generation_finished_at = timezone.now()
 
             elif processing_count == total:
-                if phase == 'analysis':
-                    self.status = 'analyzing'
-                elif phase == 'generation':
-                    self.status = 'generating'
+                if phase == "analysis":
+                    self.status = "analyzing"
+                elif phase == "generation":
+                    self.status = "generating"
 
-        self.save(update_fields=[
-            'status',
-            'is_analysis_done',
-            'is_generation_done',
-            'analysis_finished_at',
-            'generation_finished_at'
-        ])
-        
+        self.save(
+            update_fields=[
+                "status",
+                "is_analysis_done",
+                "is_generation_done",
+                "analysis_finished_at",
+                "generation_finished_at",
+            ]
+        )
+
     # =====================================================
     # NOTIFICATION CONTROL
     # =====================================================
-        
+
     def calculate_notification_status(self):
         steps = self.processing_steps.all()
 
@@ -454,7 +447,7 @@ class Session(models.Model):
             return "processing"
 
         return "success"
-    
+
     def sync_notification_status(self):
         latest_notification = self.notifications.order_by("-created_at").first()
 
@@ -466,16 +459,13 @@ class Session(models.Model):
         if latest_notification.status != new_status:
             latest_notification.status = new_status
             latest_notification.save(update_fields=["status", "updated_at"])
-            
+
+
 class CharacterProfile(models.Model):
 
     novel = models.ForeignKey(
-        Novel,
-        on_delete=models.CASCADE,
-        related_name='character_profiles'
+        Novel, on_delete=models.CASCADE, related_name="character_profiles"
     )
-
-    external_id = models.CharField(max_length=50, null=True, blank=True)
 
     name = models.CharField(max_length=100)
     appearance = models.TextField(blank=True)
@@ -485,120 +475,124 @@ class CharacterProfile(models.Model):
     race = models.CharField(max_length=50, blank=True)
     base_personality = models.TextField(blank=True)
 
-    master_image_path = models.FileField(null=True, blank=True)
-    master_voice_path = models.FileField(null=True, blank=True)
+    positive_prompt = models.TextField(blank=True)
+    negative_prompt = models.TextField(blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('novel', 'name')
+        unique_together = ("novel", "name")
+        indexes = [
+            models.Index(fields=["novel"]),
+        ]
 
     def __str__(self):
         return f"{self.novel.title} ({self.name})"
-        
-class Character(models.Model):
-    
-    session = models.ForeignKey(
-        Session,
-        on_delete=models.CASCADE,
-        related_name='characters'
-    )
 
-    profile = models.ForeignKey(
-        CharacterProfile,
-        on_delete=models.CASCADE,
-        related_name='characters'
-    )
 
-    emotion = models.CharField(max_length=50)
-
-    positive_prompt = models.TextField()
-    negative_prompt = models.TextField(blank=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('profile', 'emotion')
-        
-    def __str__(self):
-        return f"{self.session} | {self.profile} | {self.emotion}"
-        
 class Sentence(models.Model):
 
     session = models.ForeignKey(
-        Session,
-        on_delete=models.CASCADE,
-        related_name='sentences'
+        Session, on_delete=models.CASCADE, related_name="sentences"
     )
 
-    chapter = models.ForeignKey(
-        Chapter,
-        on_delete=models.CASCADE
-    )
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE)
 
     sentence_index = models.PositiveIntegerField()
-
-    character = models.ForeignKey(
-        Character,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='sentences'
-    )
-
-    TYPE_CHOICES = (
-        ('narration', 'Narration'),
-        ('dialogue', 'Dialogue'),
-    )
-
-    type = models.CharField(
-        max_length=20,
-        choices=TYPE_CHOICES,
-        default='narration'
-    )
 
     sentence = models.TextField()
     emotion = models.CharField(max_length=50, blank=True)
 
     class Meta:
-        unique_together = ('session', 'chapter', 'sentence_index')
-        
+        unique_together = ("session", "chapter", "sentence_index")
+        ordering = ["session_id", "chapter_id", "sentence_index"]
+        indexes = [
+            models.Index(fields=["session", "sentence_index"]),
+        ]
+
     def __str__(self):
         return f"{self.session} | {self.chapter} | {self.sentence_index}"
-        
-class Illustration(models.Model):
+    
+    
+class Character(models.Model):
 
     session = models.ForeignKey(
         Session,
         on_delete=models.CASCADE,
-        related_name='illustrations'
+        related_name="characters",
     )
 
     chapter = models.ForeignKey(
-        Chapter,
-        on_delete=models.CASCADE
+        Chapter, on_delete=models.CASCADE, related_name="characters"
     )
+
+    character_profile = models.ForeignKey(
+        CharacterProfile, on_delete=models.CASCADE, related_name="characters"
+    )
+
+    emotion = models.CharField(max_length=50)
 
     positive_prompt = models.TextField(blank=True)
     negative_prompt = models.TextField(blank=True)
 
     class Meta:
-        unique_together = ('session', 'chapter')
-        
+        unique_together = ("session", "chapter", "character_profile", "emotion")
+
+    def __str__(self):
+        return f"{self.chapter} | {self.character_profile.name} | {self.emotion}"
+
+
+class SentenceCharacter(models.Model):
+
+    sentence = models.ForeignKey(
+        Sentence, on_delete=models.CASCADE, related_name="sentence_characters"
+    )
+
+    character = models.ForeignKey(
+        Character, on_delete=models.CASCADE, related_name="sentence_characters"
+    )
+
+    class Meta:
+        unique_together = ("sentence", "character")
+        indexes = [
+            models.Index(fields=["sentence"]),
+            models.Index(fields=["character"]),
+        ]
+
+    def __str__(self):
+        return f"{self.sentence} | {self.character.character_profile.name}"
+
+
+class Illustration(models.Model):
+
+    session = models.ForeignKey(
+        Session, on_delete=models.CASCADE, related_name="illustrations"
+    )
+
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE)
+
+    positive_prompt = models.TextField(blank=True)
+    negative_prompt = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("session", "chapter")
+        indexes = [
+            models.Index(fields=["session"]),
+        ]
+
     def __str__(self):
         return f"{self.session} | {self.chapter}"
-        
+
+
 class ProcessingStep(models.Model):
 
     session = models.ForeignKey(
-        Session,
-        on_delete=models.CASCADE,
-        related_name='processing_steps'
+        Session, on_delete=models.CASCADE, related_name="processing_steps"
     )
 
     PHASE_CHOICES = (
-        ('analysis', 'Analysis'),
-        ('generation', 'Generation'),
+        ("analysis", "Analysis"),
+        ("generation", "Generation"),
     )
 
     phase = models.CharField(max_length=20, choices=PHASE_CHOICES)
@@ -608,17 +602,13 @@ class ProcessingStep(models.Model):
     order = models.PositiveIntegerField(default=1)
 
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('success', 'Success'),
-        ('failed', 'Failed'),
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("success", "Success"),
+        ("failed", "Failed"),
     )
 
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending'
-    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
     error_message = models.TextField(blank=True)
 
@@ -626,34 +616,34 @@ class ProcessingStep(models.Model):
     finish_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ['phase', 'order']
-        
+        ordering = ["phase", "order"]
+
     def __str__(self):
         return f"{self.name} | {self.status}"
-        
+
     def mark_start(self):
-        self.status = 'processing'
+        self.status = "processing"
         self.start_at = timezone.now()
-        self.save(update_fields=['status', 'start_at'])
+        self.save(update_fields=["status", "start_at"])
 
         self.session.sync_notification_status()
 
     def mark_success(self):
-        self.status = 'success'
+        self.status = "success"
         self.finish_at = timezone.now()
-        self.save(update_fields=['status', 'finish_at'])
+        self.save(update_fields=["status", "finish_at"])
 
         self.session.sync_session_status()
         self.session.sync_notification_status()
 
     def mark_failed(self, error_msg):
-        self.status = 'failed'
+        self.status = "failed"
         self.error_message = error_msg
         self.finish_at = timezone.now()
-        self.save(update_fields=['status', 'error_message', 'finish_at'])
+        self.save(update_fields=["status", "error_message", "finish_at"])
 
         self.session.sync_notification_status()
-        
+
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
 

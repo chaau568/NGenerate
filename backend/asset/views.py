@@ -9,21 +9,20 @@ from django.http import FileResponse, Http404
 from django.utils.encoding import smart_str
 import os
 
-from .models import CharacterImage, CharacterVoice, IllustrationImage, Video
+from .models import (
+    CharacterProfileAsset,
+    CharacterAsset,
+    NarratorVoice,
+    IllustrationImage,
+    Video,
+)
 from ngenerate_sessions.models import Session
 
 
 @extend_schema(
     summary="ดึง Assets ทั้งหมดของ Session",
-    description="ดึงข้อมูลภาพตัวละคร, เสียง, ภาพประกอบ และวิดีโอ ที่เกี่ยวข้องกับ Session ID ที่ระบุ",
-    parameters=[
-        OpenApiParameter(
-            name="session_id",
-            description="ID ของ Session ที่ต้องการดึงข้อมูล",
-            required=True,
-            type=int,
-        )
-    ],
+    description="ดึงข้อมูลภาพต้นแบบ, ภาพอารมณ์ตัวละคร, เสียง, ภาพฉาก และวิดีโอ",
+    parameters=[OpenApiParameter(name="session_id", required=True, type=int)],
 )
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -34,48 +33,65 @@ def session_assets(request):
             {"error": "session_id is required"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    session = get_object_or_404(Session, id=session_id, user=request.user)
+    session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    char_images = CharacterImage.objects.filter(session=session)
-    char_voices = CharacterVoice.objects.filter(session=session)
-    illustrations = IllustrationImage.objects.filter(session=session)
+    char_images = CharacterProfileAsset.objects.filter(
+        character_profile__novel=session.novel
+    ).select_related("character_profile")
+
+    emotion_images = CharacterAsset.objects.filter(
+        session=session
+    ).select_related("character__character_profile", "character__chapter")
+
+    char_voices = NarratorVoice.objects.filter(session=session).select_related(
+        "sentence"
+    )
+    illustrations = IllustrationImage.objects.filter(session=session).select_related(
+        "illustration__chapter"
+    )
     videos = Video.objects.filter(session=session).order_by("-version")
 
     data = {
         "session_id": session.id,
-        "character_images": [
+        "character_master_images": [
             {
                 "id": img.id,
-                "character_id": img.character.id,
-                "character_name": img.character.name,
+                "character_id": img.character_profile.id,
+                "character_name": img.character_profile.name,
                 "url": request.build_absolute_uri(img.image.url),
-                "created_at": img.created_at,
             }
             for img in char_images
+        ],
+        "character_emotion_images": [
+            {
+                "id": img.id,
+                "character_name": img.character.character_profile.name,
+                "emotion": img.character.emotion,
+                "chapter_order": img.character.chapter.order,
+                "url": request.build_absolute_uri(img.image.url),
+            }
+            for img in emotion_images
         ],
         "character_voices": [
             {
                 "id": v.id,
-                "sentence_id": v.sentence.id,
+                "sentence_index": v.sentence.sentence_index,
                 "url": request.build_absolute_uri(v.voice.url),
                 "duration": v.duration,
-                "created_at": v.created_at,
             }
             for v in char_voices
         ],
         "illustrations": [
             {
                 "id": ill.id,
-                "illustration_id": ill.illustration.id,
+                "chapter_order": ill.illustration.chapter.order,
                 "url": request.build_absolute_uri(ill.image.url),
-                "created_at": ill.created_at,
             }
             for ill in illustrations
         ],
         "videos": [
             {
                 "id": vid.id,
-                "name": vid.name,
                 "version": vid.version,
                 "url": request.build_absolute_uri(vid.video_file.url),
                 "duration": str(vid.duration) if vid.duration else None,

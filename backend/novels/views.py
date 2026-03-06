@@ -12,7 +12,7 @@ from .models import Novel, Chapter
 from notifications.models import Notification
 from .tasks import process_uploaded_file_task
 
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiParameter
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
 
@@ -125,6 +125,8 @@ def novel_detail(request, novel_id):
         novel.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    characters = novel.get_characters().prefetch_related("image_assets")
+
     return Response(
         {
             "id": novel.id,
@@ -143,14 +145,15 @@ def novel_detail(request, novel_id):
                 {
                     "name": char.name,
                     "master_image_path": (
-                        char.master_image_path.url if char.master_image_path else None
+                        img.image.url if (img := char.image_assets.first()) else None
                     ),
                 }
-                for char in novel.get_characters()
+                for char in characters
             ],
         },
         status=status.HTTP_200_OK,
     )
+
 
 extend_schema(
     summary="รายการตัวละครในนิยาย",
@@ -168,16 +171,19 @@ extend_schema(
             "race": serializers.CharField(allow_null=True),
             "base_personality": serializers.CharField(allow_null=True),
             "master_image_path": serializers.CharField(allow_null=True),
-            "master_voice_path": serializers.CharField(allow_null=True),
         },
     ),
     tags=["Library"],
 )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def novel_characters(request, novel_id):
     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
-    characters = novel.get_characters() 
+    characters = novel.get_characters()
+
+    characters = novel.get_characters().prefetch_related("image_assets")
 
     return Response(
         [
@@ -191,10 +197,7 @@ def novel_characters(request, novel_id):
                 "race": char.race,
                 "base_personality": char.base_personality,
                 "master_image_path": (
-                    char.master_image_path.url if char.master_image_path else None
-                ),
-                "master_voice_path": (
-                    char.master_voice_path.url if char.master_voice_path else None
+                    img.image.url if (img := char.image_assets.first()) else None
                 ),
             }
             for char in characters
