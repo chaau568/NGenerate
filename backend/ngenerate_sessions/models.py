@@ -2,12 +2,14 @@ from django.utils import timezone
 from django.db import models, transaction
 from django.core.exceptions import ValidationError
 from novels.models import Novel, Chapter
-from users.models import UserCredit
-from payments.models import CreditLog
-from notifications.models import Notification
+from payments.services.credit_service import CreditService
 from .pricing import CreditPricing
+from notifications.services import get_or_create_notification, update_notification
 
 from django.conf import settings
+from utils.file_url import build_file_url
+
+from django.db.models import Count, Q
 
 
 class Session(models.Model):
@@ -31,6 +33,7 @@ class Session(models.Model):
         ("japanese", "Japanese"),
         ("futuristic", "Futuristic"),
         ("medieval", "Medieval"),
+        ("modern", "Modern"),
         ("ghibli", "Ghibli"),
     )
 
@@ -38,6 +41,12 @@ class Session(models.Model):
         ("man1", "Man 1"),
         ("man2", "Man 2"),
         ("girl1", "Girl 1"),
+    )
+
+    PHASE_CHOICES = (
+        ("analysis", "analysis"),
+        ("generation", "generation"),
+        ("none", "none"),
     )
 
     novel = models.ForeignKey(Novel, on_delete=models.CASCADE, related_name="sessions")
@@ -48,6 +57,10 @@ class Session(models.Model):
 
     session_type = models.CharField(
         max_length=50, choices=SESSION_TYPE_CHOICES, default="analysis"
+    )
+
+    current_phase = models.CharField(
+        max_length=20, choices=PHASE_CHOICES, default="none"
     )
 
     style = models.CharField(max_length=50, choices=STYLE_CHOICES, default="ghibli")
@@ -126,31 +139,26 @@ class Session(models.Model):
 
             required_credit = session.calculate_analysis_credit()
 
-            wallet = UserCredit.objects.select_for_update().get(user=session.novel.user)
-
-            if wallet.available < required_credit:
+            try:
+                CreditService.lock_credit(
+                    user=session.novel.user,
+                    amount=required_credit,
+                    session=session,
+                    log_type="analysis_lock",
+                )
+            except ValueError:
                 raise ValidationError("Not enough credits")
-
-            wallet.available -= required_credit
-            wallet.save(update_fields=["available"])
 
             session.locked_credits = required_credit
             session.status = "analyzing"
-            session.save(update_fields=["locked_credits", "status"])
+            session.current_phase = "analysis"
+            session.save(update_fields=["locked_credits", "status", "current_phase"])
 
-            Notification.objects.create(
+            get_or_create_notification(
                 user=self.novel.user,
                 session=self,
-                task_name="Analysis",
-                status="processing",
-                message=f"Starting analysis for {self.name}",
-            )
-
-            CreditLog.objects.create(
-                user=session.novel.user,
-                session=session,
-                type="analysis_lock",
-                amount=-required_credit,
+                task_type="analysis",
+                message=f"Analyzing session '{self.name}'...",
             )
 
     def complete_analysis(self):
@@ -161,15 +169,9 @@ class Session(models.Model):
 
             session.chapters.update(is_analyzed=True)
 
-            CreditLog.objects.create(
-                user=session.novel.user,
-                session=session,
-                type="analysis_complete",
-                amount=0,
-            )
-
             session.locked_credits = 0
             session.status = "analyzed"
+            session.current_phase = "none"
             session.is_analysis_done = True
             session.analysis_finished_at = timezone.now()
 
@@ -177,18 +179,22 @@ class Session(models.Model):
                 update_fields=[
                     "locked_credits",
                     "status",
+                    "current_phase",
                     "is_analysis_done",
                     "analysis_finished_at",
                 ]
             )
 
-            Notification.objects.create(
-                user=self.novel.user,
-                session=self,
-                task_name="Analysis",
-                status="success",
-                message=f"Analysis completed for {self.name}",
-            )
+            notification = self.notifications.filter(
+                task_type="analysis", status="processing"
+            ).first()
+
+            if notification:
+                update_notification(
+                    notification,
+                    status="success",
+                    message=f"Analysis completed for '{self.name}'",
+                )
 
     # =====================================================
     # GENERATION FLOW
@@ -211,35 +217,37 @@ class Session(models.Model):
 
             required_credit = session.calculate_generation_credit()
 
-            wallet = UserCredit.objects.select_for_update().get(user=session.novel.user)
-
-            if wallet.available < required_credit:
+            try:
+                CreditService.lock_credit(
+                    user=session.novel.user,
+                    amount=required_credit,
+                    session=session,
+                    log_type="generation_lock",
+                )
+            except ValueError:
                 raise ValidationError("Not enough credits")
-
-            wallet.available -= required_credit
-            wallet.save(update_fields=["available"])
 
             session.locked_credits = required_credit
             session.status = "generating"
+            session.current_phase = "generation"
 
             if session.session_type != "full":
                 session.session_type = "full"
 
-            session.save(update_fields=["locked_credits", "status", "session_type"])
-
-            CreditLog.objects.create(
-                user=session.novel.user,
-                session=session,
-                type="generation_lock",
-                amount=-required_credit,
+            session.save(
+                update_fields=[
+                    "locked_credits",
+                    "status",
+                    "session_type",
+                    "current_phase",
+                ]
             )
 
-            Notification.objects.create(
+            get_or_create_notification(
                 user=self.novel.user,
                 session=self,
-                task_name="Generation",
-                status="processing",
-                message=f"Starting generation for {self.name}",
+                task_type="generation",
+                message=f"Generating assets for '{self.name}'...",
             )
 
     def complete_generation(self):
@@ -251,15 +259,9 @@ class Session(models.Model):
             if session.status != "generating":
                 raise ValidationError("Invalid state")
 
-            CreditLog.objects.create(
-                user=session.novel.user,
-                session=session,
-                type="generation_complete",
-                amount=0,
-            )
-
             session.locked_credits = 0
             session.status = "generated"
+            session.current_phase = "none"
             session.is_generation_done = True
             session.generation_finished_at = timezone.now()
 
@@ -267,18 +269,22 @@ class Session(models.Model):
                 update_fields=[
                     "locked_credits",
                     "status",
+                    "current_phase",
                     "is_generation_done",
                     "generation_finished_at",
                 ]
             )
 
-            Notification.objects.create(
-                user=self.novel.user,
-                session=self,
-                task_name="Generation",
-                status="success",
-                message=f"Generation completed for {self.name}",
-            )
+            notification = self.notifications.filter(
+                task_type="generation", status="processing"
+            ).first()
+
+            if notification:
+                update_notification(
+                    notification,
+                    status="success",
+                    message=f"Video generation completed for '{self.name}'",
+                )
 
     # =====================================================
     # FAIL / REFUND
@@ -292,18 +298,10 @@ class Session(models.Model):
 
             if session.locked_credits > 0:
 
-                wallet = UserCredit.objects.select_for_update().get(
-                    user=session.novel.user
-                )
-
-                wallet.available += session.locked_credits
-                wallet.save(update_fields=["available"])
-
-                CreditLog.objects.create(
+                CreditService.refund_credit(
                     user=session.novel.user,
-                    session=session,
-                    type="refund",
                     amount=session.locked_credits,
+                    session=session,
                 )
 
             session.locked_credits = 0
@@ -311,41 +309,64 @@ class Session(models.Model):
 
             session.save(update_fields=["locked_credits", "status"])
 
-            Notification.objects.create(
-                user=self.novel.user,
-                session=self,
-                task_name=f"{self.status.capitalize()} Failed",
-                status="error",
-                message=error_msg or f"An error occurred during {self.status}",
-            )
+            notification = self.notifications.filter(
+                task_type__in=["analysis", "generation"], status="processing"
+            ).first()
+
+            if notification:
+                update_notification(
+                    notification,
+                    status="error",
+                    message=error_msg
+                    or f"{notification.task_type.capitalize()} failed",
+                )
+
+    # =====================================================
+    # RETRY
+    # =====================================================
+
+    def reset(self):
+        self.status = "pending"
+        self.error_message = ""
+        self.start_at = None
+        self.finish_at = None
+        self.save(update_fields=["status", "error_message", "start_at", "finish_at"])
 
     # =====================================================
     # PROGRESSING CONTROL
     # =====================================================
 
     def get_progress_percentage(self):
-        steps = self.processing_steps.all()
-        total = steps.count()
+
+        if self.current_phase == "none":
+            return 0
+
+        steps = self.processing_steps.filter(phase=self.current_phase)
+
+        agg = steps.aggregate(
+            total=Count("id"), success=Count("id", filter=Q(status="success"))
+        )
+
+        total = agg["total"]
+        success = agg["success"]
 
         if total == 0:
             return 0
 
-        success_count = steps.filter(status="success").count()
-        progress = (success_count / total) * 100
-        return round(progress)
+        return round((success / total) * 100)
 
     def update_notification_progress(self):
 
-        notification = self.notifications.filter(status="processing").last()
+        notification = self.notifications.filter(
+            status="processing", task_type__in=["analysis", "generation"]
+        ).first()
 
         if not notification:
             return
 
         progress = self.get_progress_percentage()
 
-        notification.message = (
-            f"{notification.task_name} in progress... {progress}% completed."
-        )
+        notification.message = f"{notification.task_type.capitalize()} in progress... {progress}% completed."
         notification.save(update_fields=["message", "updated_at"])
 
     def create_processing_steps(self, phase):
@@ -369,63 +390,12 @@ class Session(models.Model):
 
         new_steps = []
         for order, name in steps_config.get(phase, []):
-            step, _ = ProcessingStep.objects.get_or_create(
-                session=self,
-                phase=phase,
-                name=name,
-                defaults={"order": order, "status": "pending"},
+            step, _ = ProcessingStep.objects.create(
+                session=self, phase=phase, name=name, order=order, status="pending"
             )
             new_steps.append(step)
 
         return new_steps
-
-    def sync_session_status(self):
-        steps = self.processing_steps.all()
-
-        if not steps.exists():
-            return
-
-        if steps.filter(status="failed").exists():
-            self.status = "failed"
-            self.save(update_fields=["status"])
-            return
-
-        for phase in ["analysis", "generation"]:
-            phase_steps = steps.filter(phase=phase)
-
-            if not phase_steps.exists():
-                continue
-
-            total = phase_steps.count()
-
-            success_count = phase_steps.filter(status="success").count()
-            processing_count = phase_steps.filter(status="processing").count()
-
-            if success_count == total:
-                if phase == "analysis":
-                    self.status = "analyzed"
-                    self.is_analysis_done = True
-                    self.analysis_finished_at = timezone.now()
-                elif phase == "generation":
-                    self.status = "generated"
-                    self.is_generation_done = True
-                    self.generation_finished_at = timezone.now()
-
-            elif processing_count == total:
-                if phase == "analysis":
-                    self.status = "analyzing"
-                elif phase == "generation":
-                    self.status = "generating"
-
-        self.save(
-            update_fields=[
-                "status",
-                "is_analysis_done",
-                "is_generation_done",
-                "analysis_finished_at",
-                "generation_finished_at",
-            ]
-        )
 
     # =====================================================
     # NOTIFICATION CONTROL
@@ -448,17 +418,25 @@ class Session(models.Model):
 
         return "success"
 
-    def sync_notification_status(self):
-        latest_notification = self.notifications.order_by("-created_at").first()
+    def sync_notification_status(self, task_type):
 
-        if not latest_notification:
+        notification = self.notifications.filter(task_type=task_type).first()
+
+        if not notification:
             return
 
         new_status = self.calculate_notification_status()
 
-        if latest_notification.status != new_status:
-            latest_notification.status = new_status
-            latest_notification.save(update_fields=["status", "updated_at"])
+        if notification.status != new_status:
+            notification.status = new_status
+            notification.save(update_fields=["status", "updated_at"])
+
+    # =====================================================
+    # STYLE
+    # =====================================================
+
+    def get_style_choices(self):
+        return [{"value": value, "label": label} for value, label in self.STYLE_CHOICES]
 
 
 class CharacterProfile(models.Model):
@@ -489,6 +467,12 @@ class CharacterProfile(models.Model):
     def __str__(self):
         return f"{self.novel.title} ({self.name})"
 
+    def get_master_image_url(self):
+        if hasattr(self, "asset") and self.asset.image:
+            return build_file_url(self.asset.image)
+
+        return build_file_url("assets/defaults/default_avatar.jpg")
+
 
 class Sentence(models.Model):
 
@@ -512,8 +496,8 @@ class Sentence(models.Model):
 
     def __str__(self):
         return f"{self.session} | {self.chapter} | {self.sentence_index}"
-    
-    
+
+
 class Character(models.Model):
 
     session = models.ForeignKey(
@@ -625,27 +609,20 @@ class ProcessingStep(models.Model):
         self.status = "processing"
         self.start_at = timezone.now()
         self.save(update_fields=["status", "start_at"])
-
-        self.session.sync_notification_status()
+        self.session.sync_notification_status(self.phase)
 
     def mark_success(self):
         self.status = "success"
         self.finish_at = timezone.now()
         self.save(update_fields=["status", "finish_at"])
-
-        self.session.sync_session_status()
-        self.session.sync_notification_status()
+        self.session.sync_notification_status(self.phase)
 
     def mark_failed(self, error_msg):
         self.status = "failed"
         self.error_message = error_msg
         self.finish_at = timezone.now()
         self.save(update_fields=["status", "error_message", "finish_at"])
-
-        self.session.sync_notification_status()
+        self.session.sync_notification_status(self.phase)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-
-        if self.session:
-            self.session.sync_notification_status()

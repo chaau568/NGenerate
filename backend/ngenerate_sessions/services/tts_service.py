@@ -1,46 +1,54 @@
+import os
 import requests
-import base64
-from pathlib import Path
 from django.conf import settings
-from django.core.files.base import ContentFile
+from utils.retry import retry
 
 
 class TTSService:
 
-    def __init__(self):
-        self.base_url = settings.TTS_SERVICE_URL
-        self.voice_root = Path(settings.MASTER_VOICE_ROOT)
+    BASE_URL = settings.AI_API_URL
+    TIMEOUT = settings.AI_TIMEOUT
+    MASTER_VOICE_DIR = settings.MASTER_VOICE_ROOT
 
-    def generate(self, text: str, voice_type: str, emotion: str):
+    def generate(
+        self,
+        text,
+        voice_type,
+        emotion,
+        output_path,
+        speed=1.0,
+        cfg=2.0,
+        step=48,
+        cross_fade_duration=0.15,
+    ):
 
-        emotion = emotion or "neutral"
-
-        voice_dir = self.voice_root / voice_type
-
-        ref_audio = voice_dir / f"{emotion}.wav"
-        ref_text = voice_dir / f"{emotion}.txt"
-
-        if not ref_audio.exists():
-            raise FileNotFoundError(f"Voice audio not found: {ref_audio}")
+        output_path = output_path.replace("\\", "/")
+        if output_path.startswith(settings.STORAGE_ROOT):
+            output_path = output_path.replace(settings.STORAGE_ROOT + "/", "")
 
         payload = {
-            "ref_audio": str(ref_audio),
-            "ref_text": str(ref_text),
+            "voice_type": voice_type,
+            "emotion": emotion,
             "text": text,
+            "output": output_path,
+            "speed": speed,
+            "cfg": cfg,
+            "step": step,
+            "cross_fade_duration": cross_fade_duration,
         }
 
-        response = requests.post(
-            f"{self.base_url}/generate",
-            json=payload,
-            timeout=settings.LLAMA_TIMEOUT,
-        )
+        def request():
 
-        response.raise_for_status()
+            res = requests.post(
+                f"{self.BASE_URL}/tts/generate",
+                json=payload,
+                timeout=self.TIMEOUT,
+            )
 
-        data = response.json()
+            res.raise_for_status()
 
-        audio_bytes = base64.b64decode(data["audio_base64"])
+            data = res.json()
 
-        audio_file = ContentFile(audio_bytes, name="voice.wav")
+            return data["voice_path"], data["duration"]
 
-        return audio_file, data["duration"]
+        return retry(request, retries=3, delay=3)

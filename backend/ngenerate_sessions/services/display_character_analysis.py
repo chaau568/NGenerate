@@ -4,9 +4,8 @@ import requests
 
 class DisplayCharacterAnalysis:
 
-    def __init__(self, ollama_url, llama_model, timeout=3600, batch_size=20):
-        self.url = ollama_url
-        self.model = llama_model
+    def __init__(self, ai_api_url: str, timeout: int, batch_size=20):
+        self.ai_api_url = ai_api_url
         self.timeout = timeout
         self.batch_size = batch_size
 
@@ -50,18 +49,16 @@ class DisplayCharacterAnalysis:
         {sentence_block}
         """
 
+        payload = ({"prompt": prompt, "options": {"temperature": 0.2, "top_p": 0.9, "repeat_penalty": 1.1,}})
+
         try:
             response = requests.post(
-                self.url,
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.2},
-                },
+                f"{self.ai_api_url}/llm/generate",
+                json=payload,
                 timeout=self.timeout,
             )
 
+            response.raise_for_status()
             raw = response.json().get("response", "")
 
             import re

@@ -19,7 +19,32 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY", default="unsafe-secret-key")
 DEBUG = env.bool("DEBUG", default=True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "biometrically-towerless-yadiel.ngrok-free.dev",
+    "127.0.0.1", 
+    "localhost",
+]
+
+# -------------------------------------------------
+# COSR Config
+# -------------------------------------------------
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+CORS_ALLOW_CREDENTIALS = True
+# CORS_ALLOW_ALL_ORIGINS = True
+
+CORS_URLS_REGEX = r"^(?!/payments/webhook/).*$"
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
 
 # -------------------------------------------------
 # APPLICATIONS
@@ -154,11 +179,35 @@ GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default=None)
 GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default=None)
 
 # -------------------------------------------------
+# EMAIL (ส่ง OTP)
+# ใช้ Gmail SMTP — ต้องเปิด App Password ใน Google Account
+# https://myaccount.google.com/apppasswords
+# -------------------------------------------------
+ 
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")      # your@gmail.com
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="") # App Password (16 ตัว)
+DEFAULT_FROM_EMAIL = env("EMAIL_HOST_USER", default="noreply@ngenerate.com")
+ 
+# -------------------------------------------------
+# OTP CONFIG
+# -------------------------------------------------
+OTP_EXPIRE_MINUTES = env.int("OTP_EXPIRE_MINUTES", default=10)  # OTP หมดอายุใน 10 นาที
+OTP_LENGTH = env.int("OTP_LENGTH", default=6)                    # OTP 6 หลัก
+
+# -------------------------------------------------
 # PAYMENTS SETTINGS
 # -------------------------------------------------
 
 PROMPTPAY_ID = env("PROMPTPAY_ID", default=None)
 PAYMENTS_EXPIRE_MINUTES = env.int('PAYMENTS_EXPIRE_MINUTES', default=15)
+
+OMISE_PUBLIC_KEY = env("OMISE_PUBLIC_KEY", default=None)
+OMISE_SECRET_KEY = env("OMISE_SECRET_KEY", default=None)
+OMISE_WEBHOOK_SECRET = env("OMISE_WEBHOOK_SECRET", default=None)
 
 # -------------------------------------------------
 # INTERNATIONALIZATION
@@ -199,35 +248,6 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
 # -------------------------------------------------
-# MODEL Config
-# -------------------------------------------------
-OLLAMA_URL=env("OLLAMA_URL")
-LLAMA_MODEL=env("LLAMA_MODEL")
-LLAMA_TIMEOUT=int(env("TIMEOUT", default=3600))
-
-POPPLER_PATH = env("POPPLER_PATH", default='/usr/bin/poppler')
-
-TTS_SERVICE_URL = env("TTS_SERVICE_URL", default='https://runpod-xxxxx.proxy.runpod.net')
-
-# -------------------------------------------------
-# COSR Config
-# -------------------------------------------------
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-CORS_ALLOW_CREDENTIALS = True
-
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "authorization",
-    "content-type",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
-]
-
-# -------------------------------------------------
 # STORAGE CONFIG
 # -------------------------------------------------
 
@@ -240,6 +260,8 @@ if ENVIRONMENT == "production":
     STORAGE_ROOT = RUNPOD_STORAGE_ROOT
 else:
     STORAGE_ROOT = LOCAL_STORAGE_ROOT
+    
+POPPLER_PATH = env("POPPLER_PATH", default=None)
 
 # -------------------------------------------------
 # CORE STORAGE PATHS
@@ -260,8 +282,16 @@ MASTER_VOICE_ROOT = os.path.join(
 
 DEFAULT_ASSET_ROOT = os.path.join(
     ASSET_ROOT,
-    env("DEFAULT_ASSET_DIR", default="default")
+    env("DEFAULT_ASSET_DIR", default="defaults")
 )
+
+# -------------------------------------------------
+# TMP PATH
+# -------------------------------------------------
+
+TMP_ROOT = os.path.join(STORAGE_ROOT, "tmp")
+
+os.makedirs(TMP_ROOT, exist_ok=True)
 
 # -------------------------------------------------
 # DEFAULT ASSETS
@@ -286,27 +316,11 @@ os.makedirs(MODEL_ROOT, exist_ok=True)
 # MODEL PATH
 # -------------------------------------------------
 
-TTS_MODEL_ROOT = os.path.join(
-    MODEL_ROOT,
-    env("TTS_MODEL_DIR", default="tts")
-)
+AI_API_URL = env("AI_API_URL", default="http://localhost:8000")
+AI_TIMEOUT = env.int("TIMEOUT", default=3600)
 
-LLM_MODEL_ROOT = os.path.join(
-    MODEL_ROOT,
-    env("LLM_MODEL_DIR", default="llm")
-)
+BASE_FILE_URL=f"{AI_API_URL}/files"
 
-SD_MODEL_ROOT = os.path.join(
-    MODEL_ROOT,
-    env("SD_MODEL_DIR", default="stable_diffusion")
-)
-
-RUNPOD_COMFY_URL = env("RUNPOD_COMFY_URL", default="")
-RUNPOD_TIMEOUT = env.int("RUNPOD_TIMEOUT", default=600)
-
-CHARACTER_T2I_WORKFLOW_ID = env("CHARACTER_T2I_WORKFLOW_ID", default="")
-CHARACTER_REF_WORKFLOW_ID = env("CHARACTER_REF_WORKFLOW_ID", default="")
-SCENE_T2I_WORKFLOW_ID = env("SCENE_T2I_WORKFLOW_ID", default="")
 
 # -------------------------------------------------
 # MEDIA (Django)

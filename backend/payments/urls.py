@@ -1,14 +1,33 @@
+"""
+payments/urls.py
+================
+
+สำคัญ: webhook ต้องใช้ Django view ธรรมดา (ไม่ใช่ DRF api_view)
+เพราะต้องการ access raw request.body ก่อน parse
+และต้องปิด CSRF ด้วย @csrf_exempt
+"""
 from django.urls import path
 from . import views
 
 urlpatterns = [
-    path("package/create/", views.create_package, name="create-package"),
-    path("package/", views.list_packages, name="get-list-packages"),
-    path("package/admin/", views.list_all_packages, name="get-list-all-packages"),
-    path("create/", views.create_payment, name="create-payment"),
-    path("admin/pending/", views.pending_transactions, name="get-transactions-pending"),
-    path("admin/<int:transaction_id>/confirm/", views.confirm_payment, name="confirm-payment"),
-    path("checking/<int:transaction_id>/", views.check_payment, name="get-payment-status"),
-    path("my-payments/", views.my_payments, name="my-payments"),
-    path("my-credit-logs/", views.my_credit_logs, name="my-credit-logs"),
+    # ── Packages ──────────────────────────────────────────
+    path("packages/", views.list_packages, name="list_packages"),
+    path("packages/all/", views.list_all_packages, name="list_all_packages"),
+    path("packages/create/", views.create_package, name="create_package"),
+
+    # ── Transactions ──────────────────────────────────────
+    path("create/", views.create_payment, name="create_payment"),
+    path("pending/", views.pending_transactions, name="pending_transactions"),
+    path("confirm/<int:transaction_id>/", views.confirm_payment, name="confirm_payment"),
+    path("check/<int:transaction_id>/", views.check_payment, name="check_payment"),
+    path("my-payments/", views.my_payments, name="my_payments"),
+
+    # ── Credit Logs ───────────────────────────────────────
+    path("my-credit-logs/", views.my_credit_logs, name="my_credit_logs"),
+
+    # ── Omise Webhook ─────────────────────────────────────
+    # ⚠️ URL นี้ต้องเป็น public (ไม่ต้อง auth)
+    # ⚠️ ต้อง register URL นี้ใน Omise Dashboard ด้วย
+    # ⚠️ ถ้าใช้ ngrok สำหรับ dev: https://xxxx.ngrok.io/payments/webhook/omise/
+    path("webhook/omise/", views.omise_webhook, name="omise_webhook"),
 ]

@@ -2,7 +2,7 @@ import { clientFetch } from "@/lib/client-fetch";
 
 export type Notification = {
     id: number;
-    task_name: string;
+    task_type: string;
     status: string;
     message: string;
     is_read: boolean;

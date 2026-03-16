@@ -5,9 +5,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 
-from django.http import FileResponse, Http404
-from django.utils.encoding import smart_str
-import os
+from utils.file_url import build_file_url
 
 from .models import (
     CharacterProfileAsset,
@@ -39,9 +37,9 @@ def session_assets(request):
         character_profile__novel=session.novel
     ).select_related("character_profile")
 
-    emotion_images = CharacterAsset.objects.filter(
-        session=session
-    ).select_related("character__character_profile", "character__chapter")
+    emotion_images = CharacterAsset.objects.filter(session=session).select_related(
+        "character__character_profile", "character__chapter"
+    )
 
     char_voices = NarratorVoice.objects.filter(session=session).select_related(
         "sentence"
@@ -58,7 +56,7 @@ def session_assets(request):
                 "id": img.id,
                 "character_id": img.character_profile.id,
                 "character_name": img.character_profile.name,
-                "url": request.build_absolute_uri(img.image.url),
+                "url": build_file_url(img.image) if img.image else None,
             }
             for img in char_images
         ],
@@ -68,7 +66,7 @@ def session_assets(request):
                 "character_name": img.character.character_profile.name,
                 "emotion": img.character.emotion,
                 "chapter_order": img.character.chapter.order,
-                "url": request.build_absolute_uri(img.image.url),
+                "url": build_file_url(img.image) if img.image else None,
             }
             for img in emotion_images
         ],
@@ -76,7 +74,7 @@ def session_assets(request):
             {
                 "id": v.id,
                 "sentence_index": v.sentence.sentence_index,
-                "url": request.build_absolute_uri(v.voice.url),
+                "url": build_file_url(v.voice) if v.voice else None,
                 "duration": v.duration,
             }
             for v in char_voices
@@ -85,7 +83,7 @@ def session_assets(request):
             {
                 "id": ill.id,
                 "chapter_order": ill.illustration.chapter.order,
-                "url": request.build_absolute_uri(ill.image.url),
+                "url": build_file_url(ill.image) if ill.image else None,
             }
             for ill in illustrations
         ],
@@ -93,7 +91,7 @@ def session_assets(request):
             {
                 "id": vid.id,
                 "version": vid.version,
-                "url": request.build_absolute_uri(vid.video_file.url),
+                "url": build_file_url(vid.video_path) if vid.video_path else None,
                 "duration": str(vid.duration) if vid.duration else None,
                 "is_final": vid.is_final,
                 "created_at": vid.created_at,
@@ -115,40 +113,35 @@ def delete_video(request, video_id):
     )
 
 
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def watch_video(request, video_id):
+
+#     video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
+
+#     return Response({"url": build_file_url(video.video_path) if video.video_path else None})
+
+from django.shortcuts import redirect
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def watch_video(request, video_id):
+
     video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
 
-    if not video.video_file:
-        raise Http404("Video file not found")
+    if not video.video_path:
+        return Response({"error": "Video not found"}, status=404)
 
-    file_path = video.video_file.path
-
-    response = FileResponse(open(file_path, "rb"), content_type="video/mp4")
-
-    response["Content-Disposition"] = (
-        f'inline; filename="{smart_str(os.path.basename(file_path))}"'
-    )
-    response["Content-Length"] = os.path.getsize(file_path)
-
-    return response
+    return redirect(build_file_url(video.video_path))
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def download_video(request, video_id):
+
     video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
 
-    if not video.video_file:
-        raise Http404("Video file not found")
-
-    file_path = video.video_file.path
-
-    response = FileResponse(open(file_path, "rb"), content_type="video/mp4")
-
-    response["Content-Disposition"] = (
-        f'attachment; filename="{smart_str(os.path.basename(file_path))}"'
+    return Response(
+        {"download_url": build_file_url(video.video_path) if video.video_path else None}
     )
-
-    return response

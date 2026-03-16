@@ -21,7 +21,7 @@ from rest_framework import serializers
                         name="NotificationListItem",
                         fields={
                             "id": serializers.IntegerField(),
-                            "task_name": serializers.CharField(),
+                            "task_type": serializers.CharField(),
                             "status": serializers.CharField(),
                             "message": serializers.CharField(),
                             "is_read": serializers.BooleanField(),
@@ -41,16 +41,18 @@ from rest_framework import serializers
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
-    notifications = Notification.objects.filter(user=request.user).order_by(
-        "-created_at"
+    notifications = (
+        Notification.objects.filter(user=request.user)
+        .select_related("session", "novel")
+        .order_by("-created_at")
     )
 
     data = []
     for n in notifications:
         item = {
             "id": n.id,
-            "task_name": n.task_name,
-            "status": n.status,
+            "task_type": n.task_type,
+            "status": n.get_effective_status(),
             "message": n.message,
             "is_read": n.is_read,
             "created_at": n.created_at,
@@ -73,7 +75,7 @@ def notification_list(request):
                     name="NotificationDetailData",
                     fields={
                         "id": serializers.IntegerField(),
-                        "task_name": serializers.CharField(),
+                        "task_type": serializers.CharField(),
                         "status": serializers.CharField(),
                         "message": serializers.CharField(),
                         "is_read": serializers.BooleanField(),
@@ -104,7 +106,7 @@ def notification_detail(request, notification_id):
 
     data = {
         "id": notification.id,
-        "task_name": notification.task_name,
+        "task_type": notification.task_type,
         "status": notification.get_effective_status(),
         "message": notification.message,
         "is_read": notification.is_read,
@@ -186,6 +188,7 @@ def notification_delete(request, notification_id):
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def notification_update(request, notification_id):
+
     notification = get_object_or_404(
         Notification, id=notification_id, user=request.user
     )
@@ -198,6 +201,13 @@ def notification_update(request, notification_id):
         updated_fields.append("is_read")
 
     if "status" in data:
+
+        if data["status"] not in dict(Notification.STATUS_CHOICES):
+            return Response(
+                {"error": "Invalid status"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         notification.status = data["status"]
         updated_fields.append("status")
 

@@ -1,99 +1,89 @@
 import requests
-import uuid
 from django.conf import settings
-from django.core.files.base import ContentFile
+from utils.retry import retry
 
 
 class ImageService:
 
-    def __init__(self):
-        self.base_url = settings.RUNPOD_COMFY_URL
-        self.timeout = settings.RUNPOD_TIMEOUT
+    BASE_URL = settings.AI_API_URL
+    TIMEOUT = settings.AI_TIMEOUT
 
-        self.character_t2i_workflow = settings.CHARACTER_T2I_WORKFLOW_ID
-        self.character_ref_workflow = settings.CHARACTER_REF_WORKFLOW_ID
-        self.scene_workflow = settings.SCENE_T2I_WORKFLOW_ID
+    STYLE = "anime style, cinematic lighting, high quality"
 
-    # =====================================================
-    # INTERNAL
-    # =====================================================
+    def _post(self, endpoint, payload):
 
-    def _call_comfy(self, workflow_id, inputs):
+        def request():
 
-        payload = {"workflow_id": workflow_id, "inputs": inputs}
+            res = requests.post(
+                f"{self.BASE_URL}{endpoint}",
+                json=payload,
+                timeout=self.TIMEOUT,
+            )
 
-        response = requests.post(
-            f"{self.base_url}/run", json=payload, timeout=self.timeout
-        )
+            res.raise_for_status()
 
-        response.raise_for_status()
+            data = res.json()
 
-        result = response.json()
+            if "image_path" not in data:
+                raise Exception("AI API returned invalid response")
 
-        image_url = result["image_url"]
+            return data["image_path"]
 
-        return self._download_image(image_url)
+        return retry(request, retries=3, delay=5)
 
-    def _download_image(self, image_url):
-
-        response = requests.get(image_url, timeout=120)
-        response.raise_for_status()
-
-        file_name = f"{uuid.uuid4()}.png"
-
-        return ContentFile(response.content, name=file_name)
-
-    # =====================================================
-    # CHARACTER - TEXT TO IMAGE
-    # =====================================================
+    # --------------------------------------------------
 
     def generate_character_text2image(
-        self, positive_prompt: str, negative_prompt: str = "", style: str = ""
+        self,
+        positive_prompt,
+        negative_prompt,
+        output_path,
     ):
 
-        inputs = {
-            "positive_prompt": positive_prompt,
-            "negative_prompt": negative_prompt or "",
-            "style": style,
-            "width": 768,
-            "height": 1024,
+        payload = {
+            "positive_prompt": f"{positive_prompt}, {self.STYLE}",
+            "negative_prompt": negative_prompt,
+            "output_path": output_path,
         }
 
-        return self._call_comfy(self.character_t2i_workflow, inputs)
+        return self._post("/generate/character", payload)
 
-    # =====================================================
-    # CHARACTER REF
-    # =====================================================
+    # --------------------------------------------------
 
     def generate_character_with_ref(
-        self, positive_prompt: str, negative_prompt: str, reference_image_url: str
+        self,
+        positive_prompt,
+        negative_prompt,
+        reference_image_path,
+        output_path,
     ):
 
-        inputs = {
-            "positive_prompt": positive_prompt,
-            "negative_prompt": negative_prompt or "",
-            "reference_image": reference_image_url,
-            "denoise_strength": 0.6,
-            "width": 768,
-            "height": 1024,
+        payload = {
+            "positive_prompt": f"{positive_prompt}, {self.STYLE}",
+            "negative_prompt": negative_prompt,
+            "reference_image": reference_image_path,
+            "output_path": output_path,
         }
 
-        return self._call_comfy(self.character_ref_workflow, inputs)
+        return self._post("/generate/character_ref", payload)
 
-    # =====================================================
-    # SCENE
-    # =====================================================
+    # --------------------------------------------------
 
     def generate_scene(
-        self, positive_prompt: str, negative_prompt: str = "", style: str = ""
+        self,
+        positive_prompt,
+        negative_prompt,
+        width,
+        height,
+        output_path,
     ):
 
-        inputs = {
-            "positive_prompt": positive_prompt,
-            "negative_prompt": negative_prompt or "",
-            "style": style,
-            "width": 1280,
-            "height": 720,
+        payload = {
+            "positive_prompt": f"{positive_prompt}, {self.STYLE}",
+            "negative_prompt": negative_prompt,
+            "width": width,
+            "height": height,
+            "output_path": output_path,
         }
 
-        return self._call_comfy(self.scene_workflow, inputs)
+        return self._post("/generate/scene", payload)

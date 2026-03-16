@@ -1,9 +1,15 @@
+import logging
+
 from asset.models import (
     CharacterProfileAsset,
     CharacterAsset,
     NarratorVoice,
     IllustrationImage,
     Video,
+    character_profile_asset_path,
+    character_asset_path,
+    illustration_image_path,
+    narrator_voice_path,
 )
 
 from ngenerate_sessions.models import (
@@ -11,13 +17,14 @@ from ngenerate_sessions.models import (
     Illustration,
     CharacterProfile,
     Character,
-    SentenceCharacter,
 )
 
 from .ai_service import AIService
 from .timeline_builder import TimelineBuilder
-from .video_composer import VideoComposer
 from .voice_mapper import VoiceMapper
+from asset.models import video_path
+
+logger = logging.getLogger(__name__)
 
 
 class GenerationWorkflow:
@@ -26,7 +33,13 @@ class GenerationWorkflow:
         self.session = session
         self.ai = AIService()
 
+    # =====================================================
+    # MAIN WORKFLOW
+    # =====================================================
+
     def run(self):
+
+        logger.info(f"Start generation workflow | session={self.session.id}")
 
         self.session.create_processing_steps("generation")
 
@@ -34,7 +47,8 @@ class GenerationWorkflow:
 
             step = (
                 self.session.processing_steps.filter(
-                    phase="generation", status="pending"
+                    phase="generation",
+                    status="pending",
                 )
                 .order_by("order")
                 .first()
@@ -44,6 +58,8 @@ class GenerationWorkflow:
                 break
 
             try:
+
+                logger.info(f"Running step: {step.name}")
 
                 step.mark_start()
 
@@ -67,67 +83,94 @@ class GenerationWorkflow:
 
             except Exception as e:
 
+                logger.exception(e)
+
                 step.mark_failed(str(e))
                 self.session.update_notification_progress()
+
                 raise
 
-        self.session.complete_generation()
+        logger.info(f"Generation workflow finished | session={self.session.id}")
+
+        if self.session.status == "generating":
+            self.session.complete_generation()
+        else:
+            logger.warning(
+                f"Skip complete_generation | session={self.session.id} status={self.session.status}"
+            )
 
     # =====================================================
-    # 1. CHARACTER MASTER IMAGE
+    # CHARACTER MASTER
     # =====================================================
 
     def _generate_character_master(self):
-
         profiles = CharacterProfile.objects.filter(
             characters__session=self.session
         ).distinct()
-
         for profile in profiles:
+            asset, created = CharacterProfileAsset.objects.get_or_create(
+                character_profile=profile
+            )
 
-            if hasattr(profile, "asset"):
+            if asset.image and not asset.image.endswith("default_avatar.jpg"):
                 continue
 
-            image_file = self.ai.generate_character_master(
+            filename = "master.png"
+            target_path = character_profile_asset_path(asset, filename)
+
+            image_path = self.ai.generate_character_master(
                 character_profile=profile,
-                style=self.session.style
+                output_path=target_path,
             )
 
-            CharacterProfileAsset.objects.create(
-                character_profile=profile,
-                image=image_file
-            )
+            asset.image = image_path
+            asset.save()
 
     # =====================================================
-    # 2. CHARACTER EMOTION IMAGE
+    # CHARACTER EMOTION
     # =====================================================
 
     def _generate_character_emotion(self):
 
-        characters = Character.objects.filter(
-            session=self.session
-        ).select_related("character_profile")
+        characters = Character.objects.filter(session=self.session).select_related(
+            "character_profile", "chapter"
+        )
 
         for character in characters:
 
             if CharacterAsset.objects.filter(character=character).exists():
                 continue
 
-            master_asset = character.character_profile.asset
+            master_asset = getattr(character.character_profile, "asset", None)
 
-            image_file = self.ai.generate_character_emotion(
+            if not master_asset:
+                raise Exception(
+                    f"Master image missing for profile: {character.character_profile.id}"
+                )
+
+            dummy = CharacterAsset(
+                session=self.session,
                 character=character,
-                reference_image=master_asset.image
+            )
+
+            filename = "emotion.png"
+
+            output_path = character_asset_path(dummy, filename)
+
+            image_path = self.ai.generate_character_emotion(
+                character=character,
+                reference_image_path=master_asset.image,
+                output_path=output_path,
             )
 
             CharacterAsset.objects.create(
                 session=self.session,
                 character=character,
-                image=image_file
+                image=image_path,
             )
 
     # =====================================================
-    # 3. SCENE IMAGE
+    # SCENE IMAGE
     # =====================================================
 
     def _generate_scene(self):
@@ -139,25 +182,36 @@ class GenerationWorkflow:
             if IllustrationImage.objects.filter(illustration=illustration).exists():
                 continue
 
-            image_file = self.ai.generate_scene_image(
+            dummy = IllustrationImage(
+                session=self.session,
                 illustration=illustration,
-                style=self.session.style,
+            )
+
+            filename = "scene.png"
+
+            output_path = illustration_image_path(dummy, filename)
+
+            image_path = self.ai.generate_scene_image(
+                illustration=illustration,
+                output_path=output_path,
             )
 
             IllustrationImage.objects.create(
                 session=self.session,
                 illustration=illustration,
-                image=image_file,
+                image=image_path,
             )
 
     # =====================================================
-    # 4. VOICE GENERATION
+    # VOICE
     # =====================================================
 
     def _generate_voice(self):
 
-        sentences = Sentence.objects.filter(session=self.session).order_by(
-            "chapter__order", "sentence_index"
+        sentences = (
+            Sentence.objects.filter(session=self.session)
+            .select_related("chapter")
+            .order_by("chapter__order", "sentence_index")
         )
 
         for sentence in sentences:
@@ -165,52 +219,60 @@ class GenerationWorkflow:
             if NarratorVoice.objects.filter(sentence=sentence).exists():
                 continue
 
-            sentence_character = (
-                SentenceCharacter.objects.filter(sentence=sentence)
-                .select_related("character__character_profile")
-                .first()
+            voice_type, emotion, config = VoiceMapper.map(
+                session=self.session,
+                sentence=sentence,
             )
 
-            if sentence_character:
+            dummy = NarratorVoice(
+                session=self.session,
+                sentence=sentence,
+            )
 
-                profile = sentence_character.character.character_profile
+            filename = "voice.wav"
 
-                voice_type, emotion = VoiceMapper.map_from_profile(
-                    profile=profile, sentence=sentence
-                )
+            output_path = narrator_voice_path(dummy, filename)
 
-            else:
-
-                voice_type = self.session.narrator_voice
-                emotion = sentence.emotion or "neutral"
-
-            audio_file, duration = self.ai.generate_voice_with_emotion(
-                text=sentence.sentence, voice_type=voice_type, emotion=emotion
+            voice_path, duration = self.ai.generate_voice_with_emotion(
+                text=sentence.sentence,
+                voice_type=voice_type,
+                emotion=emotion,
+                output_path=output_path,
+                **config,
             )
 
             NarratorVoice.objects.create(
                 session=self.session,
                 sentence=sentence,
-                voice=audio_file,
+                voice=voice_path,
                 duration=duration,
             )
 
     # =====================================================
-    # 5. VIDEO COMPOSE
+    # VIDEO
     # =====================================================
 
     def _compose_video(self):
 
+        existing = Video.objects.filter(session=self.session, is_final=True).first()
+
+        if existing:
+            logger.info("Video already exists")
+            return
+
         builder = TimelineBuilder(self.session)
         timeline = builder.build()
 
-        composer = VideoComposer(timeline=timeline)
+        dummy = Video(session=self.session, version=1)
+        target_path = video_path(dummy, "video.mp4")
 
-        video_path, video_duration = composer.compose()
+        job_id = self.ai.start_video_compose(timeline, output_path=target_path)
+
+        video_file_path, duration = self.ai.wait_for_video(job_id)
 
         Video.objects.create(
             session=self.session,
-            video_file=video_path,
-            duration=video_duration,
+            video_path=video_file_path,
+            duration=duration,
             is_final=True,
         )

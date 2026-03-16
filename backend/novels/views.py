@@ -1,4 +1,6 @@
 import os
+import uuid
+
 from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +16,8 @@ from .tasks import process_uploaded_file_task
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
+
+from utils.file_url import build_file_url
 
 
 @extend_schema(
@@ -42,7 +46,7 @@ def library(request):
             {
                 "id": n.id,
                 "title": n.title,
-                "cover": n.cover.url if n.cover else None,
+                "cover": build_file_url(n.get_cover_url()),
                 "total_chapters": n.get_total_chapters(),
                 "analyzed_chapters": n.get_total_analyzed_chapters(),
                 "created_at": n.created_at,
@@ -81,6 +85,7 @@ def library(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_novel(request):
+
     title = request.data.get("title")
     cover = request.FILES.get("cover")
 
@@ -89,13 +94,16 @@ def create_novel(request):
             {"error": "Please provide title"}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    novel = Novel.objects.create(title=title, user=request.user, cover=cover)
+    novel = Novel.objects.create(title=title, user=request.user)
+
+    if cover:
+        novel.set_cover(cover)
 
     return Response(
         {
             "id": novel.id,
             "title": novel.title,
-            "cover": novel.cover.url if novel.cover else None,
+            "cover": build_file_url(novel.get_cover_url()),
         },
         status=status.HTTP_201_CREATED,
     )
@@ -119,19 +127,28 @@ def novel_detail(request, novel_id):
     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
 
     if request.method == "PUT":
-        novel.edit(title=request.data.get("title"), cover=request.data.get("cover"))
+        title = request.data.get("title")
+        cover = request.FILES.get("cover")
+
+        if title:
+            novel.title = title
+
+        if cover:
+            novel.set_cover(cover)
+
+        novel.save()
 
     if request.method == "DELETE":
         novel.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    characters = novel.get_characters().prefetch_related("image_assets")
+    characters = novel.get_characters().select_related("asset")
 
     return Response(
         {
             "id": novel.id,
             "title": novel.title,
-            "cover": novel.cover.url if novel.cover else None,
+            "cover": build_file_url(novel.cover) if novel.cover else None,
             "chapters": [
                 {
                     "id": c.id,
@@ -144,9 +161,7 @@ def novel_detail(request, novel_id):
             "characters": [
                 {
                     "name": char.name,
-                    "master_image_path": (
-                        img.image.url if (img := char.image_assets.first()) else None
-                    ),
+                    "master_image_path": char.get_master_image_url(),
                 }
                 for char in characters
             ],
@@ -181,9 +196,8 @@ extend_schema(
 @permission_classes([IsAuthenticated])
 def novel_characters(request, novel_id):
     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
-    characters = novel.get_characters()
 
-    characters = novel.get_characters().prefetch_related("image_assets")
+    characters = novel.get_characters().select_related("asset")
 
     return Response(
         [
@@ -196,9 +210,7 @@ def novel_characters(request, novel_id):
                 "age": char.age,
                 "race": char.race,
                 "base_personality": char.base_personality,
-                "master_image_path": (
-                    img.image.url if (img := char.image_assets.first()) else None
-                ),
+                "master_image_path": char.get_master_image_url(),
             }
             for char in characters
         ],
@@ -243,24 +255,31 @@ def novel_characters(request, novel_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_chapter(request, novel_id):
+
+    TMP_DIR = settings.TMP_ROOT
+
     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
 
-    # 1. รับข้อมูลจาก Frontend
     story_text = request.data.get("story")
     file_obj = request.FILES.get("file")
 
-    # --- กรณีที่ 1: ส่งมาเป็น Text (บันทึกทันที) ---
+    # ---------------- TEXT ----------------
+
     if story_text:
+
         if isinstance(story_text, str):
             chapters_to_add = [story_text]
+
         elif isinstance(story_text, list):
             chapters_to_add = story_text
+
         else:
             return Response(
                 {"error": "Invalid text format"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         new_chapters = novel.bulk_add_chapters(chapters_to_add)
+
         return Response(
             {
                 "status": "completed",
@@ -270,23 +289,31 @@ def create_chapter(request, novel_id):
             status=status.HTTP_201_CREATED,
         )
 
-    # --- กรณีที่ 2: ส่งมาเป็น File (บันทึกทันที) ---
-    if file_obj:
-        file_path = default_storage.save(
-            f"uploads/{file_obj.name}", ContentFile(file_obj.read())
-        )
+    # ---------------- FILE ----------------
 
-        absolute_path = os.path.join(settings.MEDIA_ROOT, file_path)
+    if file_obj:
+
+        unique_name = f"{uuid.uuid4()}_{file_obj.name}"
+
+        file_path = os.path.join(TMP_DIR, unique_name)
+        file_path = os.path.abspath(file_path)
+
+        with open(file_path, "wb+") as f:
+            for chunk in file_obj.chunks():
+                f.write(chunk)
 
         notification = Notification.objects.create(
             user=request.user,
             novel=novel,
-            task_name="Upload & Preprocessing",
-            status="processing",
+            task_type="upload",
             message=f"Processing file {file_obj.name}",
         )
 
-        process_uploaded_file_task.delay(novel.id, absolute_path, notification.id)
+        process_uploaded_file_task.delay(
+            novel.id,
+            file_path,
+            notification.id,
+        )
 
         return Response(
             {
@@ -297,7 +324,8 @@ def create_chapter(request, novel_id):
         )
 
     return Response(
-        {"error": "No content or file provided"}, status=status.HTTP_400_BAD_REQUEST
+        {"error": "No content or file provided"},
+        status=status.HTTP_400_BAD_REQUEST,
     )
 
 

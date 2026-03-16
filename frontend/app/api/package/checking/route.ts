@@ -24,8 +24,9 @@ export async function GET(req: Request) {
     }
 
     const { res, data } = await serverFetch(
-        `/payment/checking/${transactionId}/`,
+        `/payment/check/${transactionId}/`,
         {
+            method: "GET",
             headers: {
                 Authorization: `Bearer ${accessToken}`,
             },

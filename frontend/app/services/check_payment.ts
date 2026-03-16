@@ -1,7 +1,7 @@
 import { clientFetch } from "@/lib/client-fetch";
 
 export type PaymentCheckingResponse = {
-    payment_status: "pending" | "success" | "failed";
+    payment_status: "pending" | "success" | "expired" | "failed";
 };
 
 export const checkPaymentStatus = async (

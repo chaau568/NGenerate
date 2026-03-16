@@ -268,3 +268,83 @@
   padding: 100px;
   color: #94a3b8;
 }
+
+.creditWallet {
+  text-align: center;
+}
+
+.creditTitle {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.creditAmount {
+  font-size: 36px;
+  font-weight: 700;
+  color: #facc15;
+  margin-top: 6px;
+}
+
+.creditHint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+
+.buyCreditBtn {
+  margin-top: 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* ── Password input with show/hide button ── */
+.passwordWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.passwordWrapper input {
+  width: 100%;
+  padding: 10px 40px 10px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: white;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.passwordWrapper input:focus {
+  border-color: #3b82f6;
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-55%);
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  z-index: 2;
+  width: auto;
+}
+
+.eyeBtn:hover {
+  color: #e2e8f0;
+}
+
+/* ── Per-field error message ── */
+.fieldError {
+  color: #f87171;
+  font-size: 12px;
+  margin-top: 6px;
+  margin-bottom: 0;
+  line-height: 1.4;
+}

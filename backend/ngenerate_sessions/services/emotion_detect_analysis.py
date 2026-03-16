@@ -1,12 +1,12 @@
 import json
 import requests
+import re
 
 
 class EmotionAnalysis:
 
-    def __init__(self, ollama_url, llama_model, timeout=3600, batch_size=15):
-        self.url = ollama_url
-        self.model = llama_model
+    def __init__(self, ai_api_url: str, timeout: int, batch_size=15):
+        self.ai_api_url = ai_api_url
         self.timeout = timeout
         self.batch_size = batch_size
 
@@ -44,22 +44,22 @@ class EmotionAnalysis:
         Sentences:
         {sentence_block}
         """
+        
+        payload = {
+            "prompt": prompt,
+            "options": {"temperature": 0.3, "top_p": 0.9, "repeat_penalty": 1.1,}
+        }
 
         try:
             response = requests.post(
-                self.url,
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.3},
-                },
-                timeout=self.timeout,
+                f"{self.ai_api_url}/llm/generate",
+                json=payload,
+                timeout=self.timeout
             )
+            
+            response.raise_for_status()
 
             raw_text = response.json().get("response", "")
-
-            import re
 
             match = re.search(r"\[.*\]", raw_text, re.DOTALL)
             if not match:
@@ -67,17 +67,22 @@ class EmotionAnalysis:
 
             data = json.loads(match.group(0))
 
-            valid_indexes = {s["sentence_index"] for s in batch}
-
             cleaned = []
-            for item in data:
-                if (
-                    isinstance(item, dict)
-                    and item.get("sentence_index") in valid_indexes
-                    and item.get("emotion")
-                    in ["neutral", "serious", "sad", "happy", "angry"]
-                ):
-                    cleaned.append(item)
+
+            for i in range(len(batch)):
+
+                if i < len(data):
+                    emotion = data[i].get("emotion", "neutral")
+                else:
+                    emotion = "neutral"
+
+                if emotion not in ["neutral","serious","sad","happy","angry"]:
+                    emotion = "neutral"
+
+                cleaned.append({
+                    "sentence_index": batch[i]["sentence_index"],
+                    "emotion": emotion
+                })
 
             return cleaned
 

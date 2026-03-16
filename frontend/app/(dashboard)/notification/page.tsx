@@ -156,7 +156,7 @@ export default function NotificationPage() {
               <div className={styles.content}>
                 <div className={styles.contentHeader}>
                   <div className={styles.taskInfo}>
-                    <h3 className={styles.taskName}>{item.task_name}</h3>
+                    <h3 className={styles.taskName}>{item.task_type}</h3>
                     <span className={styles.time}>
                       {formatDate(item.created_at)}
                     </span>

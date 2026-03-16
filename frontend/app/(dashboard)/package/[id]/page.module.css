@@ -6,6 +6,7 @@
   flex-direction: column;
 }
 
+/* ── Header ──────────────────────────────────────────── */
 .header {
   width: 100%;
   display: flex;
@@ -22,9 +23,9 @@
 .header h1 {
   font-size: 32px;
   font-weight: 700;
+  color: white;
 }
 
-/* Back Button Area */
 .backBtn {
   background: rgba(255, 255, 255, 0.1);
   border: none;
@@ -43,12 +44,12 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Checkout Card */
+/* ── Checkout Card ───────────────────────────────────── */
 .checkoutCard {
   align-self: center;
   background: #1a1a1a;
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   border-radius: 24px;
   padding: 40px;
   display: flex;
@@ -61,6 +62,7 @@
 .cardTitle {
   font-size: 20px;
   font-weight: 700;
+  color: white;
   margin-bottom: 8px;
 }
 
@@ -68,9 +70,10 @@
   font-size: 13px;
   color: #94a3b8;
   margin-bottom: 24px;
+  text-align: center;
 }
 
-/* Amount Box */
+/* ── Amount Box ──────────────────────────────────────── */
 .amountBox {
   width: 100%;
   background: rgba(255, 255, 255, 0.05);
@@ -91,34 +94,30 @@
 .amountValue {
   font-size: 32px;
   font-weight: 800;
+  color: white;
   margin-top: 4px;
 }
 
-/* QR Section */
+/* ── QR Section ──────────────────────────────────────── */
 .qrSection {
   background: white;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 20px;      
+  border-radius: 16px;
   margin-bottom: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2); 
 }
 
 .qrImage {
-  width: 180px;
-  height: 180px;
+  width: 280px;       
+  height: 280px;      
   display: block;
+  image-rendering: crisp-edges; 
 }
 
-.qrPlaceholder {
-  width: 180px;
-  height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000;
-  font-size: 12px;
-}
-
-/* Expiry Badge */
+/* ── Expiry Badge ────────────────────────────────────── */
 .expiryBadge {
   display: flex;
   align-items: center;
@@ -128,23 +127,47 @@
   border-radius: 20px;
   font-size: 14px;
   color: white;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .timerText {
-  color: #f87171;
   font-weight: 700;
   margin-left: 4px;
+  transition: color 0.3s;
 }
 
-/* Cancel Button */
+/* ── Polling indicator ───────────────────────────────── */
+.pollingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 28px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+  flex-shrink: 0;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.65); }
+}
+
+/* ── Cancel Button ───────────────────────────────────── */
 .cancelBtn {
   width: 100%;
   padding: 14px;
-  background: #333;
+  background: rgba(255, 255, 255, 0.08);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
@@ -153,11 +176,23 @@
 }
 
 .cancelBtn:hover {
-  background: #444;
+  background: rgba(255, 255, 255, 0.15);
 }
 
+/* ── Ref text ────────────────────────────────────────── */
 .refText {
   margin-top: 16px;
   font-size: 12px;
   color: #475569;
+}
+
+/* ── Loading Wrapper ─────────────────────────────────── */
+.loadingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 120px 0;
+  color: #94a3b8;
 }

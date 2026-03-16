@@ -14,9 +14,15 @@ interface Chapter {
   title: string;
 }
 
+interface StyleChoice {
+  value: string;
+  label: string;
+}
+
 interface AnalyzeResponse {
   details: {
     session_name: string;
+    style: string;
     chapters: Chapter[];
   };
   summary: {
@@ -26,6 +32,7 @@ interface AnalyzeResponse {
     total_credit_required: number;
     credits_remaining: number;
   };
+  style_choices: StyleChoice[];
   status: string;
 }
 
@@ -35,6 +42,10 @@ export default function AnalyzeSummaryPage() {
   const sessionId = params.id as string;
 
   const [sessionName, setSessionName] = useState("");
+  const [style, setStyle] = useState("");
+  const [styleChoices, setStyleChoices] = useState<
+    { value: string; label: string }[]
+  >([]);
   const [originalName, setOriginalName] = useState("");
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [nameChanged, setNameChanged] = useState(false);
@@ -65,6 +76,9 @@ export default function AnalyzeSummaryPage() {
       setSessionName(data.details.session_name);
       setOriginalName(data.details.session_name);
       setChapters(data.details.chapters);
+
+      setStyle(data.details.style);
+      setStyleChoices(data.style_choices);
 
       statusRef.current = data.status;
     }
@@ -196,6 +210,24 @@ export default function AnalyzeSummaryPage() {
             </button>
           </div>
         </div>
+        <div className={styles.labelTitle}>Style</div>
+
+        <select
+          className={styles.styleSelect}
+          value={style}
+          onChange={(e) => {
+            const newStyle = e.target.value;
+            setStyle(newStyle);
+
+            editMutation.mutate({ style: newStyle });
+          }}
+        >
+          {styleChoices.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className={styles.card}>

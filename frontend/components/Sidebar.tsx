@@ -132,10 +132,7 @@ export default function Sidebar() {
         </div>
 
         <div className={styles.profileInfo}>
-          <div className={styles.username}>{profile?.username ?? "Admin"}</div>
-          <div className={styles.package}>
-            {profile?.package ?? "Premium User"}
-          </div>
+          <div className={styles.username}>{profile?.username ?? "T_T"}</div>
         </div>
       </Link>
     </aside>

@@ -10,6 +10,20 @@ import { clientFetch } from "@/lib/client-fetch";
 import { ChevronLeft, Clock, Loader2 } from "lucide-react";
 import styles from "./page.module.css";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface PaymentData {
+  transaction_id: number;
+  ref: string;
+  qr: string; 
+  charge_id: string; 
+  amount: number;
+  package_name: string;
+  expire_at: string; 
+  expire_in_minutes: number;
+}
+
+
 export default function PaymentPage({
   params,
 }: {
@@ -18,7 +32,7 @@ export default function PaymentPage({
   const router = useRouter();
   const { id } = use(params);
 
-  const [paymentData, setPaymentData] = useState<any>(null);
+  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<number>(0);
 
@@ -39,20 +53,21 @@ export default function PaymentPage({
         const data = await res.json();
 
         if (!res.ok) {
-          const message =
+          setFailedMessage(
             data?.detail ||
-            data?.message ||
-            "Something went wrong. Please try again.";
-
-          setFailedMessage(message);
+              data?.message ||
+              "Something went wrong. Please try again.",
+          );
           setShowFailed(true);
           return;
         }
 
-        setPaymentData(data);
+        setPaymentData(data as PaymentData);
         setTimeLeft(data.expire_in_minutes * 60);
-      } catch (err: any) {
-        setFailedMessage(err?.message || "Unable to connect to server.");
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Unable to connect to server.";
+        setFailedMessage(message);
         setShowFailed(true);
       } finally {
         setLoading(false);
@@ -66,27 +81,48 @@ export default function PaymentPage({
     queryKey: ["payment-status", paymentData?.transaction_id],
     queryFn: () => checkPaymentStatus(paymentData!.transaction_id),
     enabled: Boolean(paymentData?.transaction_id),
-    refetchInterval: 3000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.payment_status;
+      if (status === "success" || status === "failed" || status === "expired") {
+        return false;
+      }
+      return 3000;
+    },
   });
 
   useEffect(() => {
     if (!paymentStatus) return;
 
-    if (paymentStatus.payment_status === "success") {
+    const status = paymentStatus.payment_status;
+
+    if (status === "success") {
       setShowSuccess(true);
     }
 
-    if (paymentStatus.payment_status === "failed") {
+    // ✅ แก้ไข: แยก failed และ expired ออกจากกัน
+    if (status === "failed") {
       setShowFailed(true);
-      setFailedMessage("Payment was not successful.");
+      setFailedMessage("Payment was not successful. Please try again.");
+    }
+
+    if (status === "expired") {
+      setShowFailed(true);
+      setFailedMessage("QR Code has expired. Please create a new payment.");
     }
   }, [paymentStatus]);
 
+  // ── Countdown timer ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!timeLeft) return;
 
     const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
@@ -98,7 +134,7 @@ export default function PaymentPage({
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  // 🔥 Loading Screen
+  // ── Loading screen ──────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className={styles.container}>
@@ -110,28 +146,24 @@ export default function PaymentPage({
     );
   }
 
-  // 🔥 ถ้า failed ไม่ต้อง render checkout
+  // ── Failed / Expired → แสดง popup แล้ว redirect กลับ ──────────────────────
   if (showFailed) {
     return (
-      <>
-        <SharePopUpFailed
-          isOpen={showFailed}
-          onClose={() => {
-            setShowFailed(false);
-            router.push("/package");
-          }}
-          title="Payment Failed"
-          message={failedMessage}
-        />
-      </>
+      <SharePopUpFailed
+        isOpen={showFailed}
+        onClose={() => {
+          setShowFailed(false);
+          router.push("/package");
+        }}
+        title="Payment Failed"
+        message={failedMessage}
+      />
     );
   }
 
-  // 🔥 กัน null 100%
-  if (!paymentData) {
-    return null;
-  }
+  if (!paymentData) return null;
 
+  // ── Main render ─────────────────────────────────────────────────────────────
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -149,6 +181,7 @@ export default function PaymentPage({
           Scan the QR code to complete your purchase
         </p>
 
+        {/* Amount */}
         <div className={styles.amountBox}>
           <span className={styles.amountLabel}>AMOUNT TO PAY</span>
           <div className={styles.amountValue}>
@@ -159,20 +192,33 @@ export default function PaymentPage({
           </div>
         </div>
 
+        {/* QR Code */}
         <div className={styles.qrSection}>
           <img
             src={paymentData.qr}
-            alt="Payment QR Code"
+            alt="PromptPay QR Code"
             className={styles.qrImage}
           />
         </div>
 
+        {/* Expiry timer — แดงเมื่อเหลือน้อยกว่า 60 วินาที */}
         <div className={styles.expiryBadge}>
           <Clock size={16} />
           <span>
             Expires in{" "}
-            <span className={styles.timerText}>{formatTime(timeLeft)}</span>
+            <span
+              className={styles.timerText}
+              style={{ color: timeLeft < 60 ? "#f87171" : "#facc15" }}
+            >
+              {formatTime(timeLeft)}
+            </span>
           </span>
+        </div>
+
+        {/* Polling indicator */}
+        <div className={styles.pollingRow}>
+          <span className={styles.dot} />
+          <span>Waiting for payment...</span>
         </div>
 
         <button className={styles.cancelBtn} onClick={() => router.back()}>
@@ -182,6 +228,7 @@ export default function PaymentPage({
         <p className={styles.refText}>Ref: {paymentData.ref}</p>
       </div>
 
+      {/* Success popup */}
       <SharePopUpSuccess
         isOpen={showSuccess}
         onClose={() => {

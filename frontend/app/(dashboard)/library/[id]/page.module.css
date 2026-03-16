@@ -331,3 +331,27 @@
   margin: 0;
 }
 
+.editBtn {
+  background: #64748b;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editBtn:hover {
+  background: #475569;
+}
+
+.textInput {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #121212;
+  color: white;
+}

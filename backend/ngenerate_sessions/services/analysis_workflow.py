@@ -23,18 +23,15 @@ class AnalysisWorkflow:
         self.novel = session.novel
         self.chapters = session.chapters.all().order_by("order")
 
-        self.ollama_url = settings.OLLAMA_URL
-        self.llama_model = settings.LLAMA_MODEL
-        self.timeout = settings.LLAMA_TIMEOUT
+        self.ai_api_url = settings.AI_API_URL
+        self.timeout = settings.AI_TIMEOUT
 
-        # emotion modifier (NO LLM)
         self.EMOTION_MAP = {
-            "angry": "angry expression",
-            "sad": "sad expression",
             "happy": "smiling",
-            "fear": "fearful expression",
-            "surprise": "surprised expression",
-            "neutral": "",
+            "sad": "crying",
+            "angry": "angry face",
+            "serious": "serious face",
+            "neutral": "neutral face",
         }
 
     # =========================================================
@@ -85,7 +82,7 @@ class AnalysisWorkflow:
             self.session.complete_analysis()
 
         except Exception as e:
-            if 'step' in locals():
+            if "step" in locals():
                 step.mark_failed(str(e))
             self.session.fail(str(e))
             raise e
@@ -96,14 +93,12 @@ class AnalysisWorkflow:
     def _analyze_characters(self, chapter):
 
         analyzer = CharacterProfileAnalysis(
-            self.ollama_url,
-            self.llama_model,
+            self.ai_api_url,
             self.timeout,
         )
 
         generator = GenerateCharacterPrompt(
-            self.ollama_url,
-            self.llama_model,
+            self.ai_api_url,
             self.timeout,
         )
 
@@ -156,7 +151,6 @@ class AnalysisWorkflow:
 
             result_prompt = generator.generate_prompt(
                 character_profile_data=character_data,
-                mode="text-to-image",
                 style=self.session.style,
             )
 
@@ -170,12 +164,9 @@ class AnalysisWorkflow:
     # =========================================================
     def _analyze_sentences_pipeline(self, chapter):
         converter = ConvertTextToJson()
-        emotion_analyzer = EmotionAnalysis(
-            self.ollama_url, self.llama_model, self.timeout
-        )
-        display_analyzer = DisplayCharacterAnalysis(
-            self.ollama_url, self.llama_model, self.timeout
-        )
+        emotion_analyzer = EmotionAnalysis(self.ai_api_url, self.timeout)
+
+        display_analyzer = DisplayCharacterAnalysis(self.ai_api_url, self.timeout)
 
         story_json = converter.text_file_to_json(chapter.story)
         emotion_results = emotion_analyzer.run(story_json)
@@ -191,16 +182,12 @@ class AnalysisWorkflow:
             for idx in item["sentence_index_range"]:
                 display_map.setdefault(idx, []).append(item["name"])
 
-        character_map = {c.name: c for c in self.novel.character_profiles.all()}
+        character_map = {
+            c.name: c for c in CharacterProfile.objects.filter(novel=self.novel)
+        }
 
         with transaction.atomic():
             Sentence.objects.filter(session=self.session, chapter=chapter).delete()
-
-            existing_prompts_cache = set(
-                Character.objects.filter(
-                    session=self.session, chapter=chapter
-                ).values_list("character_profile_id", "emotion")
-            )
 
             for s in story_json["sentences"]:
                 idx = s["sentence_index"]
@@ -215,19 +202,20 @@ class AnalysisWorkflow:
                 )
 
                 for name in display_map.get(idx, []):
+
                     profile = character_map.get(name)
+
                     if not profile:
                         continue
 
-                    SentenceCharacter.objects.get_or_create(
-                        sentence=sentence_obj,
-                        character_profile=profile,
+                    char_obj = self._get_character_emotion_prompt(
+                        chapter, profile, current_emotion
                     )
 
-                    cache_key = (profile.id, current_emotion)
-                    if cache_key not in existing_prompts_cache:
-                        self._get_character_emotion_prompt(chapter, profile, current_emotion)
-                        existing_prompts_cache.add(cache_key)
+                    SentenceCharacter.objects.get_or_create(
+                        sentence=sentence_obj,
+                        character=char_obj,
+                    )
 
     # =========================================================
     # SCENE ANALYSIS
@@ -235,8 +223,7 @@ class AnalysisWorkflow:
     def _analyze_scene(self, chapter):
 
         analyzer = SceneAnalysis(
-            self.ollama_url,
-            self.llama_model,
+            self.ai_api_url,
             self.timeout,
         )
 
@@ -260,7 +247,11 @@ class AnalysisWorkflow:
         base_positive = profile.positive_prompt
         base_negative = profile.negative_prompt
 
-        positive_prompt = f"{base_positive}, {emotion_modifier}" if emotion_modifier else base_positive
+        positive_prompt = (
+            f"{base_positive}, {emotion_modifier}"
+            if emotion_modifier
+            else base_positive
+        )
 
         char_obj, _ = Character.objects.get_or_create(
             session=self.session,
@@ -272,5 +263,5 @@ class AnalysisWorkflow:
                 "negative_prompt": base_negative,
             },
         )
-        
+
         return char_obj

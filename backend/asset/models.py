@@ -1,15 +1,17 @@
 import os
 from django.db import models
+from django.conf import settings
+
 from ngenerate_sessions.models import (
     Session,
     CharacterProfile,
     Sentence,
     Illustration,
-    Character
+    Character,
 )
 
-from django.conf import settings
-from django.core.files.base import ContentFile
+from utils.runpod_storage import delete_runpod_file
+
 
 # =====================================================
 # STORAGE BASE
@@ -22,13 +24,15 @@ def session_storage_path(session, folder, filename):
     novel_id = session.novel_id
     session_id = session.id
 
-    return os.path.join(
-        "ngenerate",
-        f"user_{user_id}",
-        f"novel_{novel_id}",
-        f"session_{session_id}",
-        folder,
-        filename,
+    return "/".join(
+        [
+            "user_data",
+            f"user_{user_id}",
+            f"novel_{novel_id}",
+            f"session_{session_id}",
+            folder,
+            filename,
+        ]
     )
 
 
@@ -41,21 +45,20 @@ def character_profile_asset_path(instance, filename):
 
     user_id = instance.character_profile.novel.user_id
     novel_id = instance.character_profile.novel_id
+    profile_id = instance.character_profile.id
 
-    char_name = instance.character_profile.name.replace(" ", "_").lower()
+    ext = os.path.splitext(filename)[1] or ".png"
+    filename = f"master{ext}"
 
-    ext = filename.split(".")[-1] if "." in filename else "png"
-
-    filename = f"master.{ext}"
-
-    return os.path.join(
-        "user_data",
-        f"user_{user_id}",
-        "novels",
-        f"novel_{novel_id}",
-        "characters",
-        char_name,
-        filename,
+    return "/".join(
+        [
+            "user_data",
+            f"user_{user_id}",
+            f"novel_{novel_id}",
+            "characters",
+            f"p{profile_id}",
+            filename,
+        ]
     )
 
 
@@ -67,11 +70,7 @@ class CharacterProfileAsset(models.Model):
         related_name="asset",
     )
 
-    image = models.ImageField(
-        upload_to=character_profile_asset_path,
-        blank=True,
-        null=True,
-    )
+    image = models.CharField(max_length=500, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -80,46 +79,38 @@ class CharacterProfileAsset(models.Model):
 
     def save(self, *args, **kwargs):
 
+        # default avatar
         if not self.image:
-
-            default_avatar = settings.DEFAULT_USER_AVATAR
-
-            if os.path.exists(default_avatar):
-
-                with open(default_avatar, "rb") as f:
-
-                    safe_name = self.character_profile.name.replace(" ", "_").lower()
-
-                    self.image.save(
-                        f"default_{safe_name}.png",
-                        ContentFile(f.read()),
-                        save=False,
-                    )
+            self.image = "assets/defaults/default_avatar.jpg"
 
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
 
-        if self.image:
-            self.image.delete(save=False)
+        if self.image and not self.image.startswith("assets/"):
+            try:
+                delete_runpod_file(self.image)
+            except Exception:
+                pass
 
         super().delete(*args, **kwargs)
 
 
 # =====================================================
-# CHARACTER IMAGE
+# CHARACTER EMOTION IMAGE
 # =====================================================
 
 
 def character_asset_path(instance, filename):
 
     chapter_order = instance.character.chapter.order
-    char_name = instance.character.character_profile.name.replace(" ", "_").lower()
-    emotion = instance.character.emotion
+    emotion = instance.character.emotion or "neutral"
 
-    ext = filename.split(".")[-1] if "." in filename else "png"
+    profile_id = instance.character.character_profile_id
 
-    filename = f"ch{chapter_order}_{char_name}_{emotion}.{ext}"
+    ext = os.path.splitext(filename)[1] or ".png"
+
+    filename = f"ch{chapter_order}_p{profile_id}_{emotion}{ext}"
 
     return session_storage_path(
         instance.session,
@@ -142,7 +133,7 @@ class CharacterAsset(models.Model):
         related_name="asset",
     )
 
-    image = models.ImageField(upload_to=character_asset_path)
+    image = models.CharField(max_length=500, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -161,7 +152,10 @@ class CharacterAsset(models.Model):
     def delete(self, *args, **kwargs):
 
         if self.image:
-            self.image.delete(save=False)
+            try:
+                delete_runpod_file(self.image)
+            except Exception:
+                pass
 
         super().delete(*args, **kwargs)
 
@@ -171,10 +165,9 @@ class CharacterAsset(models.Model):
 # =====================================================
 
 
-def narration_voice_path(instance, filename):
+def narrator_voice_path(instance, filename):
 
     sentence_index = instance.sentence.sentence_index
-
     ext = filename.split(".")[-1] if "." in filename else "wav"
 
     filename = f"sent_{sentence_index}.{ext}"
@@ -187,18 +180,23 @@ def narration_voice_path(instance, filename):
 
 
 class NarratorVoice(models.Model):
+
     session = models.ForeignKey(
         Session,
         on_delete=models.CASCADE,
         related_name="voices",
     )
+
     sentence = models.OneToOneField(
         Sentence,
         on_delete=models.CASCADE,
         related_name="voice_asset",
     )
-    voice = models.FileField(upload_to=narration_voice_path)
+
+    voice = models.CharField(max_length=500)
+
     duration = models.FloatField(default=0.0)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -210,8 +208,13 @@ class NarratorVoice(models.Model):
         return f"Voice | Sent {self.sentence.sentence_index}"
 
     def delete(self, *args, **kwargs):
+
         if self.voice:
-            self.voice.delete(save=False)
+            try:
+                delete_runpod_file(self.voice)
+            except Exception:
+                pass
+
         super().delete(*args, **kwargs)
 
 
@@ -236,17 +239,21 @@ def illustration_image_path(instance, filename):
 
 
 class IllustrationImage(models.Model):
+
     session = models.ForeignKey(
         Session,
         on_delete=models.CASCADE,
         related_name="scene_images",
     )
+
     illustration = models.OneToOneField(
         Illustration,
         on_delete=models.CASCADE,
         related_name="image_asset",
     )
-    image = models.ImageField(upload_to=illustration_image_path)
+
+    image = models.CharField(max_length=500, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -258,8 +265,13 @@ class IllustrationImage(models.Model):
         return f"Scene | Ch {self.illustration.chapter.order}"
 
     def delete(self, *args, **kwargs):
+
         if self.image:
-            self.image.delete(save=False)
+            try:
+                delete_runpod_file(self.image)
+            except Exception:
+                pass
+
         super().delete(*args, **kwargs)
 
 
@@ -280,16 +292,23 @@ def video_path(instance, filename):
 
 
 class Video(models.Model):
+
     session = models.ForeignKey(
         Session,
         on_delete=models.CASCADE,
         related_name="videos",
     )
+
     version = models.PositiveIntegerField(default=1)
-    video_file = models.FileField(upload_to=video_path)
-    duration = models.DurationField(null=True, blank=True)
+
+    video_path = models.CharField(max_length=500, blank=True, null=True)
+
+    duration = models.FloatField(default=0.0)
+
     file_size = models.FloatField(default=0.0)
+
     is_final = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -304,6 +323,11 @@ class Video(models.Model):
         return f"Video v{self.version} | Session {self.session.id}"
 
     def delete(self, *args, **kwargs):
-        if self.video_file:
-            self.video_file.delete(save=False)
+
+        if self.video_path:
+            try:
+                delete_runpod_file(self.video_path)
+            except Exception:
+                pass
+
         super().delete(*args, **kwargs)

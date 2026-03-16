@@ -10,10 +10,12 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
-from .models import Session, Character
+from .models import Session
 from novels.models import Novel, Chapter
 from users.models import UserCredit
 from payments.models import CreditLog
+from utils.file_url import build_file_url
+from utils.runpod_storage import delete_runpod_folder
 
 from .tasks import run_analysis_task, run_generation_task
 
@@ -147,6 +149,7 @@ def summary_analyze(request, session_id):
         {
             "details": {
                 "session_name": session.name,
+                "style": session.style,
                 "chapters": [
                     {"id": c.id, "order": c.order, "title": c.title} for c in chapters
                 ],
@@ -160,6 +163,7 @@ def summary_analyze(request, session_id):
                 "total_credit_required": required_credit,
                 "credits_remaining": wallet.available,
             },
+            "style_choices": session.get_style_choices(),
             "status": session.status,
         }
     )
@@ -206,6 +210,7 @@ def edit_session(request, session_id):
 
     chapter_ids = request.data.get("chapter_ids")
     name = request.data.get("name")
+    style = request.data.get("style")
 
     with transaction.atomic():
         if name is not None:
@@ -227,6 +232,13 @@ def edit_session(request, session_id):
                 )
 
             session.chapters.set(chapters)
+
+        if style is not None:
+            if style not in dict(Session.STYLE_CHOICES):
+                return Response(
+                    {"error": "Invalid style"}, status=status.HTTP_400_BAD_REQUEST
+                )
+            session.style = style
 
         session.save()
 
@@ -266,7 +278,13 @@ def start_analysis(request, session_id):
     try:
         with transaction.atomic():
             session.start_analysis()
-            transaction.on_commit(lambda: run_analysis_task.delay(session.id))
+            transaction.on_commit(
+                lambda: run_analysis_task.apply_async(
+                    args=[session.id],
+                    queue="analysis_queue",
+                    priority=5,
+                )
+            )
 
         return Response(
             {"status": session.status, "locked_credits": session.locked_credits},
@@ -310,14 +328,12 @@ def start_analysis(request, session_id):
 def summary_generate(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    # Must finish analysis first
     if not session.is_analysis_done:
         return Response(
             {"error": "Analysis not completed"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Must be in analyzed state
     if session.status != "analyzed":
         return Response(
             {"error": "Session is not ready for generation"},
@@ -370,7 +386,13 @@ def start_generation(request, session_id):
     try:
         with transaction.atomic():
             session.start_generation()
-            transaction.on_commit(lambda: run_generation_task.delay(session.id))
+            transaction.on_commit(
+                lambda: run_generation_task.apply_async(
+                    args=[session.id],
+                    queue="generation_queue",
+                    priority=7,
+                )
+            )
 
         return Response(
             {"status": session.status, "locked_credits": session.locked_credits},
@@ -454,7 +476,8 @@ def finished_tasks(request):
     failed_history = []
 
     for s in sessions:
-        latest_video = s.videos.order_by("-version").first()
+        videos = list(s.videos.all())
+        latest_video = max(videos, key=lambda v: v.version) if videos else None
 
         base_data = {
             "session_id": s.id,
@@ -463,7 +486,7 @@ def finished_tasks(request):
             "status": s.status,
             "type": s.session_type,
             "created_at": s.created_at,
-            "cover": s.novel.cover.url if s.novel.cover else None,
+            "cover": build_file_url(s.novel.get_cover_url()),
         }
 
         if s.status == "analyzed":
@@ -502,8 +525,18 @@ def finished_tasks(request):
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_session(request, session_id):
+
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
+
+    user_id = request.user.id
+    novel_id = session.novel.id
+    session_id = session.id
+
+    runpod_path = f"user_data/user_{user_id}/novel_{novel_id}/session_{session_id}"
+
+    delete_runpod_folder(runpod_path)
     session.delete()
+
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

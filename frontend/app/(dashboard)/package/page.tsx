@@ -28,7 +28,6 @@ export default function PackageListPage() {
   }, []);
 
   const handleSelect = (id: number) => {
-    // ส่ง id ไปที่หน้าชำระเงินเพื่อให้หน้านั้นจัดการเรียก create payment เอง
     router.push(`/package/${id}`);
   };
 
@@ -36,7 +35,7 @@ export default function PackageListPage() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>Subscription Plans</h1>
+      <h1 className={styles.title}>All Packages</h1>
       <div className={styles.grid}>
         {packages.map((pkg) => (
           <div key={pkg.id} className={styles.card}>

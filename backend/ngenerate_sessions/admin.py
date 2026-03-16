@@ -24,6 +24,7 @@ class ProcessingStepInline(admin.TabularInline):
 class SentenceCharacterInline(admin.TabularInline):
     model = SentenceCharacter
     extra = 0
+    # ต้องมี search_fields ใน CharacterAdmin ถึงจะใช้ autocomplete ได้
     autocomplete_fields = ["character"]
 
 
@@ -45,7 +46,6 @@ class SessionAdmin(admin.ModelAdmin):
         "is_generation_done",
         "created_at",
     )
-
     list_filter = (
         "status",
         "session_type",
@@ -53,13 +53,9 @@ class SessionAdmin(admin.ModelAdmin):
         "is_analysis_done",
         "is_generation_done",
     )
+    search_fields = ("name", "novel__title", "novel__user__email")
 
-    search_fields = (
-        "name",
-        "novel__title",
-        "novel__user__email",
-    )
-
+    # ย้ายฟิลด์คำนวณและฟิลด์เวลามาไว้ใน readonly
     readonly_fields = (
         "analyze_credits",
         "generate_credits",
@@ -70,8 +66,10 @@ class SessionAdmin(admin.ModelAdmin):
     )
 
     filter_horizontal = ("chapters",)
-
     inlines = [ProcessingStepInline]
+
+    # เพิ่ม autocomplete สำหรับ novel เพื่อป้องกัน dropdown ค้างถ้าข้อมูลเยอะ
+    autocomplete_fields = ["novel"]
 
     fieldsets = (
         (
@@ -90,13 +88,7 @@ class SessionAdmin(admin.ModelAdmin):
         ),
         (
             "Credit & Billing",
-            {
-                "fields": (
-                    "analyze_credits",
-                    "generate_credits",
-                    "locked_credits",
-                )
-            },
+            {"fields": ("analyze_credits", "generate_credits", "locked_credits")},
         ),
         (
             "Progress Flags",
@@ -120,18 +112,12 @@ class SessionAdmin(admin.ModelAdmin):
 
 @admin.register(CharacterProfile)
 class CharacterProfileAdmin(admin.ModelAdmin):
-    list_display = (
-        "name",
-        "novel",
-        "sex",
-        "age",
-        "race",
-        "updated_at",
-    )
-
+    list_display = ("name", "novel", "sex", "age", "race", "updated_at")
     list_filter = ("sex", "race")
     search_fields = ("name", "novel__title")
     readonly_fields = ("updated_at",)
+    # จำเป็นสำหรับการทำ autocomplete ในหน้าอื่นๆ
+    ordering = ["name"]
 
 
 # =========================================================
@@ -141,23 +127,11 @@ class CharacterProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Character)
 class CharacterAdmin(admin.ModelAdmin):
-
-    list_display = (
-        "session",
-        "chapter",
-        "character_profile",
-        "emotion",
-    )
-
-    list_filter = (
-        "session",
-        "emotion",
-    )
-
-    search_fields = (
-        "character_profile__name",
-        "positive_prompt",
-    )
+    list_display = ("session", "chapter", "character_profile", "emotion")
+    list_filter = ("emotion", "session")
+    # สำคัญ: ต้องเพิ่ม search_fields เพื่อให้ SentenceCharacterInline ใช้งาน autocomplete ได้
+    search_fields = ("character_profile__name", "emotion")
+    autocomplete_fields = ["session", "chapter", "character_profile"]
 
 
 # =========================================================
@@ -168,6 +142,7 @@ class CharacterAdmin(admin.ModelAdmin):
 @admin.register(Sentence)
 class SentenceAdmin(admin.ModelAdmin):
     list_display = (
+        "id",
         "session",
         "chapter",
         "sentence_index",
@@ -175,15 +150,13 @@ class SentenceAdmin(admin.ModelAdmin):
         "get_characters",
         "short_sentence",
     )
-
     list_filter = ("emotion", "session", "chapter")
-
     search_fields = (
         "sentence",
         "sentence_characters__character__character_profile__name",
     )
-
     inlines = [SentenceCharacterInline]
+    autocomplete_fields = ["session", "chapter"]
 
     def get_queryset(self, request):
         return (
@@ -193,38 +166,30 @@ class SentenceAdmin(admin.ModelAdmin):
             .prefetch_related("sentence_characters__character__character_profile")
         )
 
+    @admin.display(description="Characters in Scene")
     def get_characters(self, obj):
         chars = obj.sentence_characters.all()
-
         return (
             ", ".join(c.character.character_profile.name for c in chars)
             if chars
             else "-"
         )
 
-    get_characters.short_description = "Characters in Scene"
-
+    @admin.display(description="Sentence Text")
     def short_sentence(self, obj):
         return obj.sentence[:50] + "..." if len(obj.sentence) > 50 else obj.sentence
 
-    short_sentence.short_description = "Sentence Text"
-
 
 # =========================================================
-# Illustration Admin
+# Illustration & Processing Step
 # =========================================================
 
 
 @admin.register(Illustration)
 class IllustrationAdmin(admin.ModelAdmin):
     list_display = ("id", "session", "chapter")
-    list_filter = ("session",)
     search_fields = ("session__name", "positive_prompt")
-
-
-# =========================================================
-# Processing Step Admin
-# =========================================================
+    autocomplete_fields = ["session", "chapter"]
 
 
 @admin.register(ProcessingStep)
@@ -238,5 +203,5 @@ class ProcessingStepAdmin(admin.ModelAdmin):
         "start_at",
         "finish_at",
     )
-
     list_filter = ("phase", "status", "session")
+    search_fields = ("name", "session__name")

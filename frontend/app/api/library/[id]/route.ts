@@ -10,7 +10,7 @@ export async function GET(
     request: Request,
     context: Context
 ) {
-    const { id } = await context.params; 
+    const { id } = await context.params;
 
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("access")?.value;
@@ -63,7 +63,7 @@ export async function POST(
     request: Request,
     context: Context
 ) {
-    const { id } = await context.params; 
+    const { id } = await context.params;
 
     const cookieStore = await cookies();
     const accessToken = cookieStore.get("access")?.value;
@@ -95,6 +95,32 @@ export async function POST(
             body,
         }
     );
+
+    return NextResponse.json(data, { status: res.status });
+}
+
+export async function PUT(
+    request: Request,
+    context: Context
+) {
+    const { id } = await context.params;
+
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("access")?.value;
+
+    if (!accessToken) {
+        return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+    }
+
+    const formData = await request.formData();
+
+    const { res, data } = await serverFetch(`/library/${id}/`, {
+        method: "PUT",
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+        },
+        body: formData,
+    });
 
     return NextResponse.json(data, { status: res.status });
 }

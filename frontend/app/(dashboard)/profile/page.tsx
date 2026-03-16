@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { clientFetch } from "@/lib/client-fetch";
-import { User, Mail, Lock, Trash2, Edit2, Crown, X } from "lucide-react";
+import { User, Mail, Lock, Trash2, Edit2, Eye, EyeOff } from "lucide-react";
 import SharePopUpDelete from "@/components/SharePopUp_Delete";
 import SharePopUpSuccess from "@/components/SharePopUp_Success";
 import SharePopUpFailed from "@/components/SharePopUp_Failed";
+import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 
 interface ProfileData {
@@ -13,25 +14,31 @@ interface ProfileData {
   email: string;
   username: string;
   role: string;
-  package: string;
+  status: string;
   credits: number;
-  limit_credits: number;
   has_password: boolean;
 }
 
 type EditMode = "username" | "email" | "password" | null;
 
+// Error จาก backend มาเป็น { field: string[] | string }
+type FieldErrors = Record<string, string>;
+
 export default function ProfilePage() {
+  const router = useRouter();
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Modals State
+  // Modals
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFailedModalOpen, setIsFailedModalOpen] = useState(false);
+  const [failedMsg, setFailedMsg] = useState("");
 
-  // Edit State
+  // Edit
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [formData, setFormData] = useState({
     username: "",
@@ -40,8 +47,12 @@ export default function ProfilePage() {
     new_password: "",
   });
 
-  const [isFailedModalOpen, setIsFailedModalOpen] = useState(false);
-  const [failedMsg, setFailedMsg] = useState("");
+  // ✅ per-field errors แสดงใต้ input ที่ถูก
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  // ✅ show/hide password toggle แยกแต่ละช่อง
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showOldPassword, setShowOldPassword] = useState(false);
 
   const [deletePassword, setDeletePassword] = useState("");
 
@@ -68,8 +79,41 @@ export default function ProfilePage() {
     }
   };
 
+  // ── reset modal state เมื่อเปิด/ปิด ──────────────────────
+  const openEdit = (mode: EditMode) => {
+    setEditMode(mode);
+    setFieldErrors({});
+    setShowNewPassword(false);
+    setShowOldPassword(false);
+    setFormData((p) => ({ ...p, old_password: "", new_password: "" }));
+  };
+
+  const closeEdit = () => {
+    setEditMode(null);
+    setFieldErrors({});
+    setFormData((p) => ({ ...p, old_password: "", new_password: "" }));
+  };
+
+  // ── parse backend errors → FieldErrors ───────────────────
+  const parseBackendErrors = (result: any): FieldErrors => {
+    const errors: FieldErrors = {};
+    if (typeof result !== "object" || result === null) return errors;
+
+    for (const key of Object.keys(result)) {
+      const val = result[key];
+      if (Array.isArray(val)) {
+        errors[key] = val[0];
+      } else if (typeof val === "string") {
+        errors[key] = val;
+      }
+    }
+    return errors;
+  };
+
+  // ── submit update ─────────────────────────────────────────
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldErrors({});
 
     if (
       (editMode === "username" || editMode === "email") &&
@@ -83,15 +127,13 @@ export default function ProfilePage() {
     try {
       setIsSubmitting(true);
 
-      const payload: any = {};
+      const payload: Record<string, string> = {};
 
       if (editMode === "username") payload.username = formData.username;
       if (editMode === "email") payload.email = formData.email;
 
       if (editMode === "password") {
-        if (profile?.has_password) {
-          payload.old_password = formData.old_password;
-        }
+        if (profile?.has_password) payload.old_password = formData.old_password;
         payload.new_password = formData.new_password;
       }
 
@@ -106,35 +148,25 @@ export default function ProfilePage() {
         method: "PUT",
         body: JSON.stringify(payload),
       });
-
       const result = await res.json();
 
       if (res.ok) {
         setProfile(result);
         setSuccessMsg(`Update ${editMode} successful!`);
         setIsSuccessModalOpen(true);
-        setEditMode(null);
-        setFormData((p) => ({
-          ...p,
-          old_password: "",
-          new_password: "",
-        }));
+        closeEdit();
       } else {
-        let errorMessage = "Update failed.";
+        // ✅ parse per-field errors แสดงใต้ input
+        const parsed = parseBackendErrors(result);
 
-        if (typeof result === "object") {
-          const firstKey = Object.keys(result)[0];
-          if (Array.isArray(result[firstKey])) {
-            errorMessage = result[firstKey][0];
-          } else if (typeof result[firstKey] === "string") {
-            errorMessage = result[firstKey];
-          }
+        if (Object.keys(parsed).length > 0) {
+          setFieldErrors(parsed);
+        } else {
+          setFailedMsg("Update failed.");
+          setIsFailedModalOpen(true);
         }
-
-        setFailedMsg(errorMessage);
-        setIsFailedModalOpen(true);
       }
-    } catch (error) {
+    } catch {
       setFailedMsg("Something went wrong.");
       setIsFailedModalOpen(true);
     } finally {
@@ -142,6 +174,7 @@ export default function ProfilePage() {
     }
   };
 
+  // ── delete account ────────────────────────────────────────
   const handleDeleteAccount = async () => {
     try {
       const res = await clientFetch("/api/profile", {
@@ -158,10 +191,9 @@ export default function ProfilePage() {
       }
 
       const result = await res.json();
-
       setFailedMsg(result.detail || result.password || "Delete failed.");
       setIsFailedModalOpen(true);
-    } catch (error) {
+    } catch {
       setFailedMsg("Something went wrong.");
       setIsFailedModalOpen(true);
     }
@@ -170,17 +202,12 @@ export default function ProfilePage() {
   if (loading) return <div className={styles.loading}>Loading Profile...</div>;
   if (!profile) return <div className={styles.loading}>No data found.</div>;
 
-  const creditPercentage =
-    profile.limit_credits > 0
-      ? (profile.credits / profile.limit_credits) * 100
-      : 0;
-
   return (
     <div className={styles.container}>
       <h1 className={styles.pageTitle}>Profile</h1>
 
       <div className={styles.profileCard}>
-        {/* Top Info Section */}
+        {/* Top Info */}
         <div className={styles.topSection}>
           <div className={styles.avatarWrapper}>
             <div className={styles.avatar}>
@@ -199,7 +226,7 @@ export default function ProfilePage() {
                       setIsFailedModalOpen(true);
                       return;
                     }
-                    setEditMode("username");
+                    openEdit("username");
                   }}
                 >
                   <Edit2 size={16} />
@@ -208,7 +235,7 @@ export default function ProfilePage() {
               <div className={styles.actionButtons}>
                 <button
                   className={styles.passwordBtn}
-                  onClick={() => setEditMode("password")}
+                  onClick={() => openEdit("password")}
                 >
                   <Lock size={16} />
                   <span>
@@ -232,30 +259,26 @@ export default function ProfilePage() {
                 </button>
               </div>
             </div>
-            <div className={styles.badgeWrapper}>
-              <div className={styles.premiumBadge}>
-                <Crown size={14} />
-                <span>{profile.package.toUpperCase()} USER</span>
-              </div>
-            </div>
           </div>
         </div>
 
         {/* Credit Section */}
         <div className={styles.creditSection}>
-          <div className={styles.creditLabelGroup}>
-            <span>Credits Remaining</span>
-            <span className={styles.creditValue}>
-              <strong>{profile.credits.toLocaleString()}</strong>/
-              {profile.limit_credits.toLocaleString()}
-            </span>
+          <div className={styles.creditWallet}>
+            <span className={styles.creditTitle}>Your Credits</span>
+            <div className={styles.creditAmount}>
+              {profile.credits.toLocaleString()}
+            </div>
+            <p className={styles.creditHint}>
+              Credits are used for generating stories, images, and audio.
+            </p>
           </div>
-          <div className={styles.progressContainer}>
-            <div
-              className={styles.progressBar}
-              style={{ width: `${creditPercentage}%` }}
-            />
-          </div>
+          <button
+            className={styles.buyCreditBtn}
+            onClick={() => router.push("/package")}
+          >
+            Buy Credits
+          </button>
         </div>
 
         {/* Email Section */}
@@ -274,7 +297,7 @@ export default function ProfilePage() {
                   setIsFailedModalOpen(true);
                   return;
                 }
-                setEditMode("email");
+                openEdit("email");
               }}
             >
               <Edit2 size={16} />
@@ -283,9 +306,9 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* EDIT POPUP (Modal) */}
+      {/* ── Edit Modal ── */}
       {editMode && (
-        <div className={styles.modalOverlay} onClick={() => setEditMode(null)}>
+        <div className={styles.modalOverlay} onClick={closeEdit}>
           <div
             className={styles.modalContent}
             onClick={(e) => e.stopPropagation()}
@@ -295,7 +318,9 @@ export default function ProfilePage() {
                 Edit {editMode.charAt(0).toUpperCase() + editMode.slice(1)}
               </h3>
             </div>
+
             <form onSubmit={handleUpdate}>
+              {/* Username field */}
               {editMode === "username" && (
                 <div className={styles.inputGroup}>
                   <label>New Username</label>
@@ -307,9 +332,13 @@ export default function ProfilePage() {
                     }
                     required
                   />
+                  {fieldErrors.username && (
+                    <p className={styles.fieldError}>{fieldErrors.username}</p>
+                  )}
                 </div>
               )}
 
+              {/* Email field */}
               {editMode === "email" && (
                 <div className={styles.inputGroup}>
                   <label>New Email Address</label>
@@ -321,25 +350,51 @@ export default function ProfilePage() {
                     }
                     required
                   />
+                  {fieldErrors.email && (
+                    <p className={styles.fieldError}>{fieldErrors.email}</p>
+                  )}
                 </div>
               )}
 
+              {/* New Password field ✅ มี show/hide */}
               {editMode === "password" && (
                 <div className={styles.inputGroup}>
                   <label>New Password</label>
-                  <input
-                    type="password"
-                    placeholder="At least 8 characters"
-                    value={formData.new_password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, new_password: e.target.value })
-                    }
-                    required
-                  />
+                  <div className={styles.passwordWrapper}>
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="11–50 characters, uppercase, number, symbol"
+                      value={formData.new_password}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          new_password: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={styles.eyeBtn}
+                      onClick={() => setShowNewPassword((v) => !v)}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+                  </div>
+                  {/* ✅ แสดง regex error จาก backend */}
+                  {fieldErrors.new_password && (
+                    <p className={styles.fieldError}>
+                      {fieldErrors.new_password}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {/* แสดงช่องรหัสผ่านเดิมเสมอถ้า user มีรหัสผ่านอยู่แล้ว เพื่อความปลอดภัย */}
+              {/* Current Password field ✅ มี show/hide */}
               {profile.has_password && (
                 <div className={styles.inputGroup}>
                   <label>
@@ -347,29 +402,53 @@ export default function ProfilePage() {
                       ? "Current Password"
                       : "Confirm with Password"}
                   </label>
-                  <input
-                    type="password"
-                    value={formData.old_password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, old_password: e.target.value })
-                    }
-                    required
-                  />
+                  <div className={styles.passwordWrapper}>
+                    <input
+                      type={showOldPassword ? "text" : "password"}
+                      value={formData.old_password}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          old_password: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={styles.eyeBtn}
+                      onClick={() => setShowOldPassword((v) => !v)}
+                    >
+                      {showOldPassword ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+                  </div>
+                  {fieldErrors.old_password && (
+                    <p className={styles.fieldError}>
+                      {fieldErrors.old_password}
+                    </p>
+                  )}
                 </div>
+              )}
+
+              {/* General error (detail) */}
+              {fieldErrors.detail && (
+                <p className={styles.fieldError}>{fieldErrors.detail}</p>
+              )}
+              {fieldErrors.non_field_errors && (
+                <p className={styles.fieldError}>
+                  {fieldErrors.non_field_errors}
+                </p>
               )}
 
               <div className={styles.modalActions}>
                 <button
                   type="button"
                   className={styles.cancelBtn}
-                  onClick={() => {
-                    setEditMode(null);
-                    setFormData((p) => ({
-                      ...p,
-                      old_password: "",
-                      new_password: "",
-                    }));
-                  }}
+                  onClick={closeEdit}
                 >
                   Cancel
                 </button>
@@ -390,10 +469,10 @@ export default function ProfilePage() {
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false);
-          setDeletePassword(""); 
+          setDeletePassword("");
         }}
         onConfirm={handleDeleteAccount}
-        isLoading={isSubmitting} 
+        isLoading={isSubmitting}
         title="Delete Account?"
         description={
           <p>
@@ -401,7 +480,6 @@ export default function ProfilePage() {
             password to confirm account deletion.
           </p>
         }
-        
         showPasswordInput={profile?.has_password}
         passwordValue={deletePassword}
         onPasswordChange={setDeletePassword}

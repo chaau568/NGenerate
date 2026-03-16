@@ -7,54 +7,90 @@ from django.core.files.base import ContentFile
 from django.conf import settings
 import os
 
+import requests
+from pathlib import PurePosixPath
+from utils.runpod_storage import delete_runpod_file, delete_runpod_folder
+
+
+def upload_to_runpod(file, path):
+
+    url = f"{settings.AI_API_URL}/upload"
+
+    files = {"file": (file.name, file, file.content_type)}
+
+    data = {"path": path}
+
+    r = requests.post(url, files=files, data=data)
+
+    r.raise_for_status()
+
+    return r.json()["relative_path"]
+
 
 def novel_cover_path(instance, filename):
 
     user_id = instance.user_id
-    novel_id = instance.id or "new"
+    novel_id = instance.id
 
     ext = filename.split(".")[-1] if "." in filename else "png"
 
     filename = f"cover.{ext}"
 
-    return os.path.join(
-        "ngenerate",
-        f"user_{user_id}",
-        f"novel_{novel_id}",
-        "meta",
-        filename,
+    return str(
+        PurePosixPath(
+            "user_data",
+            f"user_{user_id}",
+            f"novel_{novel_id}",
+            "meta",
+            filename,
+        )
     )
 
 
 class Novel(models.Model):
+
     title = models.CharField(max_length=255, blank=True)
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="novels",
     )
-    cover = models.ImageField(
-        upload_to=novel_cover_path,
-        blank=True,
-        null=True,
-    )
+
+    cover = models.CharField(max_length=500, blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
+    def get_cover_url(self):
 
-        if not self.cover:
+        if self.cover:
+            return self.cover
 
-            default_path = settings.DEFAULT_NOVEL_COVER
+        return "assets/defaults/default_cover.jpg"
 
-            if os.path.exists(default_path):
+    def set_cover(self, file):
 
-                with open(default_path, "rb") as f:
-                    self.cover.save(
-                        "default_cover.png", ContentFile(f.read()), save=False
-                    )
+        path = novel_cover_path(self, file.name)
 
-        super().save(*args, **kwargs)
+        relative_path = upload_to_runpod(file, path)
+
+        if self.cover:
+            delete_runpod_file(self.cover)
+
+        self.cover = relative_path
+        self.save(update_fields=["cover"])
+
+    def delete(self, *args, **kwargs):
+
+        folder = f"user_data/user_{self.user_id}/novel_{self.id}"
+
+        try:
+            delete_runpod_folder(folder)
+        except Exception:
+            pass
+
+        super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"Novel({self.id}): {self.title}"

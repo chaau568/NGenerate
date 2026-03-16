@@ -7,7 +7,7 @@ import {
   Plus,
   Trash2,
   CheckCircle2,
-  AlertTriangle,
+  Pencil,
   FileText,
   UploadCloud,
 } from "lucide-react";
@@ -60,6 +60,11 @@ export default function NovelDetailPage() {
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [showFailedModal, setShowFailedModal] = useState(false);
   const [createdSessionId, setCreatedSessionId] = useState<number | null>(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const editFileRef = useRef<HTMLInputElement>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -211,6 +216,51 @@ export default function NovelDetailPage() {
     return `${process.env.NEXT_PUBLIC_API_BASE_URL}${cover}`;
   };
 
+  const handleUpdateNovel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    try {
+      const formData = new FormData();
+
+      if (editTitle) {
+        formData.append("title", editTitle);
+      }
+
+      const file = editFileRef.current?.files?.[0];
+      if (file) {
+        formData.append("cover", file);
+      }
+
+      const res = await clientFetch(`/api/library/${id}`, {
+        method: "PUT",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Update failed");
+      }
+
+      const updated = await res.json();
+
+      setNovel((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: updated.title || prev.title,
+              cover: updated.cover || prev.cover,
+            }
+          : prev,
+      );
+
+      setShowEditModal(false);
+    } catch (err) {
+      alert("Failed to update novel");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const goToViewCharacters = () => {
     router.push(`/library/${id}/characters`);
   };
@@ -230,6 +280,16 @@ export default function NovelDetailPage() {
           >
             <Plus size={32} strokeWidth={2.5} />
             <span>Add New Chapter</span>
+          </button>
+
+          <button
+            className={styles.editBtn}
+            onClick={() => {
+              setEditTitle(novel.title);
+              setShowEditModal(true);
+            }}
+          >
+            <Pencil size={32} />
           </button>
 
           <button
@@ -457,6 +517,58 @@ export default function NovelDetailPage() {
         onSecondary={() => setShowFailedModal(false)}
         onClose={() => setShowFailedModal(false)}
       />
+
+      {showEditModal && (
+        <div className={styles.modalOverlay}>
+          <div className={`${styles.modalContent} ${styles.addModal}`}>
+            <h3>Edit Novel</h3>
+
+            <form onSubmit={handleUpdateNovel}>
+              <div className={styles.inputGroup}>
+                <label>Novel Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className={styles.textInput}
+                  required
+                />
+              </div>
+
+              <div className={styles.inputGroup}>
+                <label>Change Cover</label>
+                <input
+                  type="file"
+                  ref={editFileRef}
+                  accept="image/*"
+                  className={styles.fileInput}
+                />
+                <p className={styles.helperText}>
+                  Leave empty if you don't want to change the cover
+                </p>
+              </div>
+
+              <div className={styles.modalActions}>
+                <button
+                  type="button"
+                  className={styles.cancelBtn}
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className={styles.confirmAddBtn}
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

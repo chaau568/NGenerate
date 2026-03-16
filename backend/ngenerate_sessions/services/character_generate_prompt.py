@@ -3,118 +3,181 @@ import requests
 
 
 class GenerateCharacterPrompt:
-    def __init__(self, ollama_url: str, llama_model: str, timeout: int):
-        self.__OLLAMA_URL = ollama_url
-        self.__LLAMA_MODEL = llama_model
-        self.__TIMEOUT = timeout
-        self.__FIXED_CHAR_NEGATIVE = "score_6, score_5, score_4, (low quality, worst quality:1.4), bad anatomy, 3d, realistic, masterpiece, ultra detailed, text, watermark, logo, background scenery"
 
-    def generate_prompt(
-        self, character_profile_data: dict, mode: str, style: str, emotion: str = None
-    ) -> dict:
-        style_guidance = {
-            "Chinese": "traditional Chinese hanfu, ornate embroidery, silk robes, ancient eastern accessories, studio ghibli inspired details",
-            "Japanese": "kimono, yukata, samurai armor elements, traditional japanese patterns, kanzashi, retro anime feel",
-            "Futuristic": "cyberpunk techwear, glowing neon accents, sleek metallic fabrics, tactical gear, sci-fi bodysuit, clean anime lines",
-            "Medieval": "tunic, leather boots, iron armor parts, cloak, fantasy medieval attire, hand-painted textures",
-            "Modern": "contemporary streetwear, casual hoodie, denim, sneakers, minimalist fashion, soft cinematic lighting",
-            "Ghibli": "studio ghibli character design, simple and elegant attire, flowing fabrics, hand-drawn anime aesthetic, vintage anime colors, soft shaded clothing",
-        }
+    def __init__(self, ai_api_url: str, timeout: int):
 
-        ALLOWED_STYLE = {
-            "chinese",
-            "japanese",
-            "futuristic",
-            "medieval",
-            "modern",
-            "ghibli",
-        }
+        self.ai_api_url = ai_api_url
+        self.timeout = timeout
 
-        if style not in ALLOWED_STYLE:
-            style = "ghibli"
+        # Pony SDXL prefix
+        self.__PROMPT_PREFIX = (
+            "score_9, score_8_up, score_7_up, "
+            "source_anime, anime style, "
+            "portrait, upper body, from head to waist, solo, "
+            "looking at viewer, facing viewer, front view"
+        )
 
-        style_details = style_guidance.get(style, f"{style} fashion and elements")
+        self.__FIXED_SUFFIX = "white background, simple background, isolated"
 
-        ALLOWED_MODES = {"text-to-image", "image-to-image"}
+        self.__FIXED_CHAR_NEGATIVE = (
+            "score_6, score_5, score_4, "
+            "(low quality, worst quality:1.4), "
+            "bad anatomy, bad hands, extra fingers, missing fingers, "
+            "3d, realistic, photorealistic, "
+            "side view, looking away, profile view, "
+            "text, watermark, logo, "
+            "background scenery, landscape, city, forest, "
+            "weapon, sword, gun, "
+            "legs, feet, toes, boots, pants, full body, lower body"
+        )
 
-        if mode not in ALLOWED_MODES:
-            mode = "text-to-image"
+    # ------------------------------------------------
+    # AGE → PROMPT IDENTITY
+    # ------------------------------------------------
 
-        if mode == "text-to-image":
-            instruction = f"""
-            Role: Professional AI Prompt Engineer for Pony Diffusion V6 XL.
-            Task: Create a tag-based prompt for a character portrait (Half-body).
+    def _resolve_identity(self, sex: str, age: str) -> str:
 
-            STRICT OBJECT RULES:
-            - ONLY include animals, weapons, or held items IF explicitly mentioned in the input data.
-            - If NO item/animal is mentioned, the character MUST be 'solo' with 'arms at sides' or 'hands in pockets'.
-            - DO NOT hallucinate extra companions or objects.
+        sex = sex.lower()
+        age = age.lower()
 
-            IMPORTANT RULES FOR PONY MODEL:
-            - START with: "score_9, score_8_up, score_7_up, source_anime,"
-            - Use comma-separated tags only.
-            - FOCUS: Half-body (Head to waist), NO legs, NO feet.
-            - BACKGROUND: "simple background, white background" only.
+        if age == "child":
+            return "1baby girl" if sex == "woman" else "1baby boy"
 
-            Follow this order:
-            1. Rating: score_9, score_8_up, score_7_up, source_anime.
-            2. Identity: 1boy/1girl, solo, (demographic).
-            3. Style: {style_details}.
-            4. Appearance: Hair, eyes, body type.
-            5. Clothing: Based on {style_details}.
-            6. Objects/Companions: ONLY if in input (e.g., holding sword, cat on shoulder).
-            7. Pose: half body, head to waist, (specific arm pose).
-            8. Background: simple background, white background, isolated.
-            9. Polish: {style} aesthetics.
-            """
-        else:
-            emotion_tag = emotion if emotion else "neutral"
-            
-            instruction = f"""
-            Task: Create an EMOTION CHANGE prompt for Pony Diffusion.
+        if age == "teen":
+            return "1little girl" if sex == "woman" else "1little boy"
 
-            IMPORTANT:
-            - Keep the SAME character identity
-            - Change ONLY facial expression
+        if age == "adult":
+            return "1adult woman" if sex == "woman" else "1adult man"
 
-            Emotion: {emotion_tag}
+        if age == "middle-aged":
+            return "1middle aged woman" if sex == "woman" else "1middle aged man"
 
-            Structure:
-            score_9, score_8_up, score_7_up, source_anime,
-            ({emotion_tag} expression),
-            1girl, solo,
-            same hairstyle,
-            same outfit,
-            half body,
-            simple background,
-            {style} aesthetics
-            """
+        if age == "elder":
+            return "1elderly woman" if sex == "woman" else "1elderly man"
+
+        return "1woman" if sex == "woman" else "1man"
+
+    # ------------------------------------------------
+
+    def generate_prompt(self, character_profile_data: dict, style: str) -> dict:
+
+        sex = character_profile_data.get("sex", "man")
+        age = character_profile_data.get("age", "adult")
+
+        identity = self._resolve_identity(sex, age)
 
         prompt = f"""
-        Role: Senior Character Designer.
-        Input Data: {json.dumps(character_profile_data)}
-        {instruction}
-        
-        Return ONLY a JSON object: {{"positive_prompt": "9-part structured prompt here"}}
+        You are an expert Stable Diffusion prompt engineer specialized in Pony SDXL anime models.
+
+        Your task is to create high quality tag prompts for an anime character portrait.
+
+        STRICT RULES:
+        - comma separated tags
+        - DO NOT include character name
+        - DO NOT include Thai or English names
+        - NO sentences
+        - NO explanations
+        - portrait composition
+        - upper body only
+        - from head to waist
+        - character MUST face forward
+        - looking at viewer
+        - front view
+        - NO side view
+        - NO background scenery
+
+        IMPORTANT OUTFIT RULES:
+
+        Outfit MUST follow the character_profile_data.
+
+        If outfit is:
+        - "not described"
+        - "simple casual clothing"
+
+        Then generate normal casual clothing only.
+
+        DO NOT invent:
+        - armor
+        - knight armor
+        - battle armor
+        - fantasy armor
+        - weapons
+
+        Character data:
+        {json.dumps(character_profile_data)}
+
+        Style theme:
+        {style}
+
+        Return JSON only.
+
+        Example:
+
+        {{
+        "positive_prompt": "short black hair, bright eyes, gentle smile, simple shirt, casual clothing, anime style, soft lighting"
+        }}
         """
 
+        payload = {
+            "prompt": prompt,
+            "options": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "repeat_penalty": 1.1,
+            },
+        }
+
         try:
+
             response = requests.post(
-                self.__OLLAMA_URL,
-                json={
-                    "model": self.__LLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": 0.3, "top_p": 0.9},
-                },
-                timeout=self.__TIMEOUT,
+                f"{self.ai_api_url}/llm/generate",
+                json=payload,
+                timeout=self.timeout,
             )
-            result = json.loads(response.json()["response"])
-            result["negative_prompt"] = self.__FIXED_CHAR_NEGATIVE
-            return result
-        except Exception as e:
+
+            response.raise_for_status()
+
+            text = response.json()["response"].strip()
+
+            if "```" in text:
+                parts = text.split("```")
+                if len(parts) >= 2:
+                    text = parts[1].replace("json", "").strip()
+
+            start = text.find("{")
+            end = text.rfind("}")
+
+            if start != -1 and end != -1:
+                text = text[start : end + 1]
+
+            raw = json.loads(text)
+
+            cleaned = raw.get("positive_prompt", "").strip()
+
+            final_prompt = (
+                f"{self.__PROMPT_PREFIX}, "
+                f"{identity}, "
+                f"{cleaned}, "
+                f"{self.__FIXED_SUFFIX}"
+            )
+
             return {
-                "positive_prompt": "",
+                "positive_prompt": final_prompt,
+                "negative_prompt": self.__FIXED_CHAR_NEGATIVE,
+            }
+
+        except Exception as e:
+
+            print(f"❌ Character Prompt API Error: {e}")
+
+            fallback = (
+                f"{self.__PROMPT_PREFIX}, "
+                f"{identity}, "
+                "simple anime character design, neutral expression, anime fantasy style, "
+                f"{self.__FIXED_SUFFIX}"
+            )
+
+            return {
+                "positive_prompt": fallback,
                 "negative_prompt": self.__FIXED_CHAR_NEGATIVE,
             }

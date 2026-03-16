@@ -1,4 +1,11 @@
-from django.utils import timezone
+# Google Login 2FA Flow ใหม่:
+#
+# เดิม (1 step):
+#   POST /login-google/ { id_token } → JWT ทันที
+#
+# ใหม่ (2 steps):
+#   Step 1: POST /login-google/        { id_token } → ส่ง OTP ไป email → { email, message }
+#   Step 2: POST /login-google/verify/ { email, otp } → JWT
 
 from django.contrib.auth import authenticate, get_user_model
 from .serializers import RegisterSerializer
@@ -11,69 +18,44 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 from django.conf import settings
-
-from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers
 from .serializers import ProfileUpdateSerializer
 from django.contrib.auth.hashers import check_password
+from users.services.otp_service import OTPService
 
+import logging
+
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
-auth_response_schema = inline_serializer(
-    name="AuthResponse",
-    fields={
-        "access": serializers.CharField(),
-        "refresh": serializers.CharField(),
-    },
-)
+
+# ── Register ──────────────────────────────────────────────────────────────────
 
 
-@extend_schema(
-    summary="ลงทะเบียนผู้ใช้ใหม่",
-    description="สร้างบัญชีผู้ใช้ใหม่ด้วย Email และ Password พร้อมรับ Token สำหรับเข้าใช้งานทันที",
-    request=RegisterSerializer,
-    responses={201: auth_response_schema},
-    tags=["Authentication"],
-)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
+    """
+    สร้างบัญชีใหม่
+    Validation ใน RegisterSerializer:
+    - email domain มีจริง (MX record check)
+    - email ไม่ซ้ำ
+    - password 11-50 ตัว + regex
+    - password == confirm_password
+    """
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-
     user = serializer.save()
 
     refresh = RefreshToken.for_user(user)
-
     return Response(
-        {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        },
+        {"access": str(refresh.access_token), "refresh": str(refresh)},
         status=status.HTTP_201_CREATED,
     )
 
 
-@extend_schema(
-    summary="เข้าสู่ระบบด้วย Email/Password",
-    request=inline_serializer(
-        name="LoginRequest",
-        fields={
-            "email": serializers.EmailField(),
-            "password": serializers.CharField(),
-        },
-    ),
-    responses={
-        200: auth_response_schema,
-        400: inline_serializer(
-            name="LoginError", fields={"error": serializers.CharField()}
-        ),
-        403: inline_serializer(
-            name="LoginForbidden", fields={"error": serializers.CharField()}
-        ),
-    },
-    tags=["Authentication"],
-)
+# ── Normal Login ──────────────────────────────────────────────────────────────
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def normal_login(request):
@@ -82,48 +64,55 @@ def normal_login(request):
 
     if not email or not password:
         return Response(
-            {"error": "Email and password required"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Email and password required"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     user = authenticate(request, email=email.lower(), password=password)
 
     if not user:
         return Response(
-            {"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid credentials"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     if not user.is_active or user.status != "activate":
         return Response(
-            {"error": "Account not active"}, status=status.HTTP_403_FORBIDDEN
+            {"error": "Account not active"},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
     refresh = RefreshToken.for_user(user)
-
     return Response(
-        {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        },
+        {"access": str(refresh.access_token), "refresh": str(refresh)},
         status=status.HTTP_200_OK,
     )
 
 
-@extend_schema(
-    summary="เข้าสู่ระบบด้วย Google",
-    request=inline_serializer(
-        name="GoogleLoginRequest", fields={"id_token": serializers.CharField()}
-    ),
-    responses={200: auth_response_schema},
-    tags=["Authentication"],
-)
+# ── Google Login — Step 1: verify Google token → ส่ง OTP ─────────────────────
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def google_login(request):
+    """
+    Step 1 ของ Google Login 2FA
+
+    Request:  { "id_token": "..." }
+    Response: { "email": "user@gmail.com", "message": "OTP sent to your email" }
+
+    หลักการ:
+    1. verify Google id_token — ถ้าผิดจะ raise ValueError
+    2. ดึง email จาก Google token (ยืนยันแล้วโดย Google)
+    3. ส่ง OTP ไปที่ email นั้น
+    4. Return email กลับไปให้ frontend เก็บไว้ใช้ใน Step 2
+    """
     token = request.data.get("id_token")
 
     if not token:
         return Response(
-            {"error": "id_token required"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "id_token required"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
@@ -133,65 +122,109 @@ def google_login(request):
 
         if not idinfo.get("email_verified"):
             return Response(
-                {"error": "Email not verified"}, status=status.HTTP_400_BAD_REQUEST
+                {"error": "Google email not verified"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         email = idinfo["email"].lower()
 
-        user, created = User.objects.get_or_create(
-            email=email,
-            defaults={
-                "username": email.split("@")[0],
-                "status": "activate",
-                "is_active": True,
-            },
-        )
-
-        if created:
-            user.set_unusable_password()
-            user.save()
-
-        refresh = RefreshToken.for_user(user)
+        # ส่ง OTP ไปที่ email
+        OTPService.generate_and_send(email=email, purpose="google_login")
 
         return Response(
             {
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-            }
+                "email": email,
+                "message": f"OTP has been sent to {email}. Please check your inbox.",
+            },
+            status=status.HTTP_200_OK,
         )
 
     except ValueError:
         return Response(
-            {"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid Google token"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    except Exception as e:
+        logger.exception(f"google_login error: {e}")
+        return Response(
+            {"error": "Failed to send OTP. Please try again."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
-@extend_schema(
-    summary="เชื่อมต่อบัญชีกับ Google",
-    description="ใช้สำหรับยืนยันตัวตนด้วย Google ID Token เพื่อเชื่อมต่อหรือตรวจสอบความถูกต้องของอีเมลที่ใช้ในระบบ",
-    request=inline_serializer(
-        name="ConnectGoogleRequest",
-        fields={
-            "id_token": serializers.CharField(help_text="ID Token ที่ได้รับจาก Google SDK")
+# ── Google Login — Step 2: verify OTP → JWT ───────────────────────────────────
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def google_login_verify_otp(request):
+    """
+    Step 2 ของ Google Login 2FA
+
+    Request:  { "email": "user@gmail.com", "otp": "123456" }
+    Response: { "access": "...", "refresh": "..." }
+
+    หลักการ:
+    1. เช็ค OTP ถูกต้องไหม (OTPService.verify)
+    2. สร้าง/หา User จาก email
+    3. คืน JWT
+    """
+    email = request.data.get("email", "").lower().strip()
+    otp_code = request.data.get("otp", "").strip()
+
+    if not email or not otp_code:
+        return Response(
+            {"error": "email and otp are required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # เช็ค OTP
+    is_valid = OTPService.verify(email=email, code=otp_code, purpose="google_login")
+
+    if not is_valid:
+        return Response(
+            {"error": "Invalid or expired OTP. Please try again."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # สร้าง/หา user จาก email
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={
+            "username": email.split("@")[0],
+            "status": "activate",
+            "is_active": True,
         },
-    ),
-    responses={
-        200: inline_serializer(
-            name="ConnectGoogleSuccess", fields={"message": serializers.CharField()}
-        ),
-        400: inline_serializer(
-            name="ConnectGoogleError", fields={"error": serializers.CharField()}
-        ),
-    },
-    tags=["User Profile"],
-)
+    )
+
+    if created:
+        user.set_unusable_password()
+        user.save()
+
+    if not user.is_active or user.status != "activate":
+        return Response(
+            {"error": "Account is not active"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    refresh = RefreshToken.for_user(user)
+    return Response(
+        {"access": str(refresh.access_token), "refresh": str(refresh)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# ── Connect Google ────────────────────────────────────────────────────────────
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def connect_google(request):
     token = request.data.get("id_token")
     if not token:
         return Response(
-            {"error": "id_token required"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "id_token required"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
@@ -210,53 +243,37 @@ def connect_google(request):
 
     except ValueError:
         return Response(
-            {"error": "Invalid Google token"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Invalid Google token"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 
-@extend_schema(
-    summary="ดึงข้อมูลโปรไฟล์ผู้ใช้",
-    description="ดึงข้อมูลส่วนตัวของผู้ใช้ที่กำลัง Login อยู่ รวมถึงจำนวน Credit ที่เหลือ",
-    responses={
-        200: inline_serializer(
-            name="ProfileResponse",
-            fields={
-                "user_id": serializers.IntegerField(),
-                "email": serializers.EmailField(),
-                "username": serializers.CharField(),
-                "role": serializers.CharField(),
-                "status": serializers.CharField(),
-                "credits": serializers.IntegerField(),
-            },
-        )
-    },
-    tags=["User Profile"],
-)
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+
 @api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
 def profile(request):
     user = request.user
 
     if request.method == "DELETE":
-
         if not user.has_usable_password():
             return Response(
                 {"detail": "You must set a password before deleting account."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         password = request.data.get("password")
-
         if not password:
             return Response(
                 {"password": "Password is required."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not check_password(password, user.password):
             return Response(
                 {"password": "Incorrect password."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         user.soft_delete()
@@ -269,17 +286,7 @@ def profile(request):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-    transaction = (
-        user.transactions.filter(
-            payment_status="success", expire_at__gte=timezone.now()
-        )
-        .order_by("-expire_at")
-        .first()
-    )
-
-    package_name = transaction.package.name if transaction else "free"
     available_credits = user.credit.available if hasattr(user, "credit") else 0
-    limit_credits = transaction.package.credits_limit if transaction else 0
 
     return Response(
         {
@@ -287,10 +294,8 @@ def profile(request):
             "email": user.email,
             "username": user.username,
             "role": user.role,
-            "package": package_name,
             "status": user.status,
             "credits": available_credits,
-            "limit_credits": limit_credits,
             "has_password": user.has_usable_password(),
         },
         status=status.HTTP_200_OK,
