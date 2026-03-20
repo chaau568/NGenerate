@@ -1,95 +1,90 @@
 .modalOverlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
+  z-index: 1100;
+  backdrop-filter: blur(10px);
+  animation: overlayIn 0.18s ease;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modalContent {
-  background: #1e1e1e;
-  padding: 30px;
-  border-radius: 16px;
-  max-width: 400px;
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  padding: 32px 28px 28px;
+  max-width: 380px;
   width: 90%;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 32px 64px rgba(0, 0, 0, 0.55);
+  animation: modalIn 0.22s cubic-bezier(0.34, 1.26, 0.64, 1);
 }
 
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Icon */
 .modalIcon {
-  margin-bottom: 15px;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   display: flex;
+  align-items: center;
   justify-content: center;
+  margin: 0 auto 18px;
+  color: #f87171;
 }
 
+/* Title */
 .modalContent h3 {
-  font-size: 22px;
-  margin-bottom: 10px;
-  color: #fff;
+  font-size: 19px;
+  font-weight: 800;
+  color: #f0efe9;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+}
+
+/* Description */
+.modalDescription {
+  margin-bottom: 22px;
 }
 
 .modalDescription p,
 .modalDescription {
-  color: #94a3b8;
-  font-size: 15px;
-  line-height: 1.5;
-  margin-bottom: 25px;
+  font-size: 13.5px;
+  color: rgba(240, 239, 233, 0.45);
+  line-height: 1.65;
 }
 
 .modalDescription strong {
-  color: #fff;
-}
-
-.modalActions {
-  display: flex;
-  gap: 12px;
-}
-
-.cancelBtn {
-  flex: 1;
-  padding: 12px;
-  border-radius: 10px;
-  background: transparent;
-  color: white;
-  border: none;
-  cursor: pointer;
-  font-weight: 400;
-  transition: background 0.2s;
-}
-
-.cancelBtn:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.confirmDeleteBtn {
-  flex: 1;
-  padding: 12px;
-  border-radius: 10px;
-  border: none;
-  background: #ef4444;
-  color: white;
-  cursor: pointer;
+  color: #f0efe9;
   font-weight: 700;
-  transition: background 0.2s;
 }
 
-.confirmDeleteBtn:hover {
-  background: #dc2626;
-}
-
-.confirmDeleteBtn:disabled,
-.cancelBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
+/* Password input */
 .passwordInputGroup {
   margin-bottom: 20px;
   text-align: left;
@@ -97,23 +92,89 @@
 
 .passwordInputGroup label {
   display: block;
-  font-size: 13px;
-  color: #94a3b8;
-  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(240, 239, 233, 0.4);
+  margin-bottom: 7px;
 }
 
 .passwordInput {
   width: 100%;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  padding: 10px 13px;
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: white;
+  border-radius: 10px;
+  color: #f0efe9;
+  font-size: 14px;
   outline: none;
-  font-size: 15px;
-  transition: border-color 0.2s;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
+.passwordInput::placeholder {
+  color: rgba(240, 239, 233, 0.2);
+}
 .passwordInput:focus {
-  border-color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons */
+.modalActions {
+  display: flex;
+  gap: 10px;
+}
+
+.cancelBtn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(240, 239, 233, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.13s,
+    color 0.13s;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f0efe9;
+}
+
+.confirmDeleteBtn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    filter 0.13s,
+    transform 0.1s;
+}
+
+.confirmDeleteBtn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.confirmDeleteBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.confirmDeleteBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

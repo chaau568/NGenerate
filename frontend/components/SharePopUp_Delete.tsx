@@ -1,15 +1,15 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle } from "lucide-react";
-import styles from "./SharePopUp_Delete.module.css"; // แยกไฟล์ CSS เพื่อความเป็นระเบียบ
+import { Trash2 } from "lucide-react";
+import styles from "./SharePopUp_Delete.module.css";
 
 interface SharePopUpDeleteProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
   title?: string;
-  description?: React.ReactNode; // ใช้ ReactNode เพื่อให้ใส่ <strong> ได้
+  description?: React.ReactNode;
   confirmText?: string;
   isLoading?: boolean;
   showPasswordInput?: boolean;
@@ -21,9 +21,9 @@ export default function SharePopUpDelete({
   isOpen,
   onClose,
   onConfirm,
-  title = "Confirm Delete?",
-  description = "Are you sure you want to delete this item? This action cannot be undone.",
-  confirmText = "Delete Permanently",
+  title = "Delete this item?",
+  description = "This action cannot be undone.",
+  confirmText = "Delete",
   isLoading = false,
   showPasswordInput = false,
   passwordValue = "",
@@ -35,7 +35,7 @@ export default function SharePopUpDelete({
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalIcon}>
-          <AlertTriangle size={48} color="#ef4444" />
+          <Trash2 size={24} />
         </div>
 
         <h3>{title}</h3>
@@ -44,10 +44,9 @@ export default function SharePopUpDelete({
           {typeof description === "string" ? <p>{description}</p> : description}
         </div>
 
-        {/* ส่วนที่เพิ่มเข้ามา: ช่องกรอกรหัสผ่าน */}
         {showPasswordInput && (
           <div className={styles.passwordInputGroup}>
-            <label htmlFor="delete-password">Confirm with Password</label>
+            <label htmlFor="delete-password">Confirm with password</label>
             <input
               id="delete-password"
               type="password"
@@ -73,7 +72,7 @@ export default function SharePopUpDelete({
             onClick={onConfirm}
             disabled={isLoading || (showPasswordInput && !passwordValue)}
           >
-            {isLoading ? "Deleting..." : confirmText}
+            {isLoading ? "Deleting…" : confirmText}
           </button>
         </div>
       </div>

@@ -2,8 +2,9 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import SharePopUpDelete from "@/components/SharePopUp_Delete";
+import SharePopUpRetry from "@/components/SharePopUp_Retry";
 import { clientFetch } from "@/lib/client-fetch";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { fetchCurrentTasks, fetchFinishedTasks } from "@/app/services/project";
@@ -17,6 +18,8 @@ import {
   Download,
   FolderOpen,
   PlusCircle,
+  RotateCcw,
+  ChevronRight,
 } from "lucide-react";
 import SharePopUpVideo from "@/components/SharePopUp_Video";
 
@@ -29,11 +32,18 @@ const getCoverUrl = (cover: string | null) => {
 export default function ProjectPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const prevCurrentCount = useRef(0);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<any | null>(null);
+
+  const [showRetryModal, setShowRetryModal] = useState(false);
+  const [retryTarget, setRetryTarget] = useState<{
+    sessionId: number;
+    sessionName: string;
+  } | null>(null);
 
   const { data: currentData } = useQuery({
     queryKey: ["currentTasks"],
@@ -45,21 +55,20 @@ export default function ProjectPage() {
   const { data: finishedData, isLoading } = useQuery({
     queryKey: ["finishedTasks"],
     queryFn: fetchFinishedTasks,
+    refetchOnWindowFocus: true,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await clientFetch(`/api/project/${id}`, {
-        method: "DELETE",
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["currentTasks"] });
+  useEffect(() => {
+    const currentCount = currentData?.current_tasks?.length ?? 0;
+    if (
+      prevCurrentCount.current > 0 &&
+      currentCount < prevCurrentCount.current
+    ) {
       queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
-    },
-  });
+    }
+    prevCurrentCount.current = currentCount;
+  }, [currentData, queryClient]);
 
-  // --- จัดการข้อมูลและแก้ปัญหา Redclare Variable ---
   const current_tasks = currentData?.current_tasks ?? [];
   const analysis_history = finishedData?.analysis_history ?? [];
   const generation_history = finishedData?.generation_history ?? [];
@@ -72,11 +81,29 @@ export default function ProjectPage() {
     generation_history.length === 0 &&
     failed_history.length === 0;
 
-  const handleWatchVideo = (e: React.MouseEvent, item: any) => {
-    e.stopPropagation();
-    setSelectedVideo(item);
-    setShowVideoModal(true);
-  };
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await clientFetch(`/api/project/${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["currentTasks"] });
+      queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
+    },
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: async (sessionId: number) => {
+      await clientFetch(`/api/sessions/retry/${sessionId}/`, {
+        method: "POST",
+      });
+    },
+    onSuccess: () => {
+      setShowRetryModal(false);
+      setRetryTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["currentTasks"] });
+      queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
+    },
+  });
 
   const handleConfirmDelete = () => {
     if (!selectedId) return;
@@ -86,6 +113,11 @@ export default function ProjectPage() {
         setSelectedId(null);
       },
     });
+  };
+
+  const handleConfirmRetry = () => {
+    if (!retryTarget) return;
+    retryMutation.mutate(retryTarget.sessionId);
   };
 
   const handleDownload = async (
@@ -109,16 +141,14 @@ export default function ProjectPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error(error);
+    } catch {
       alert("Download failed.");
     }
   };
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return "-";
-    const date = new Date(dateString);
-    return date.toLocaleString("th-TH", {
+    return new Date(dateString).toLocaleString("th-TH", {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -127,29 +157,32 @@ export default function ProjectPage() {
     });
   };
 
-  if (isLoading) {
-    return <div className={styles.statusText}>Loading Projects...</div>;
-  }
+  if (isLoading)
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingBar}>
+          <div className={styles.loadingFill} />
+        </div>
+        <span>Loading Projects…</span>
+      </div>
+    );
 
-  // ================= RENDER EMPTY STATE =================
   if (isEmpty) {
     return (
       <div className={styles.emptyContainer}>
         <div className={styles.emptyContent}>
-          <div className={styles.iconWrapper}>
-            <FolderOpen size={64} strokeWidth={1.5} />
+          <div className={styles.emptyIcon}>
+            <FolderOpen size={52} strokeWidth={1.2} />
           </div>
-          <h2 className={styles.emptyTitle}>Your Workspace is Empty</h2>
-          <p className={styles.emptyDescription}>
-            Start your creative journey by creating your first novel session.
-            We'll help you turn your story into reality.
+          <h2 className={styles.emptyTitle}>Workspace is Empty</h2>
+          <p className={styles.emptyDesc}>
+            Turn your story into a video. Start your first session.
           </p>
           <button
-            className={styles.createFirstBtn}
+            className={styles.emptyBtn}
             onClick={() => router.push("/library")}
           >
-            <PlusCircle size={20} />
-            Start Your First Project
+            <PlusCircle size={16} /> Start First Project
           </button>
         </div>
       </div>
@@ -158,229 +191,341 @@ export default function ProjectPage() {
 
   return (
     <div className={styles.container}>
-      {/* ================= CURRENT TASKS ================= */}
+      {/* ── CURRENT TASKS ── */}
       {current_tasks.length > 0 && (
-        <>
-          <h1 className={styles.title}>Current Tasks</h1>
-          {current_tasks.map((task) => {
-            const isAnalyzing = task.status === "analyzing";
-            return (
-              <div key={task.session_id} className={styles.currentCard}>
-                <div className={styles.currentHeader}>
-                  <div className={styles.leftSection}>
-                    <h3 className={styles.sessionTitle}>{task.session_name}</h3>
+        <section className={styles.section}>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionLabel}>Live</span>
+            <h2 className={styles.sectionTitle}>Running</h2>
+          </div>
+          <div className={styles.runningList}>
+            {current_tasks.map((task: any) => {
+              const isGen = task.status === "generating";
+              return (
+                <div
+                  key={task.session_id}
+                  className={styles.runningCard}
+                  onClick={() => router.push(`/project/${task.session_id}`)}
+                >
+                  <div className={styles.runningTop}>
+                    <div className={styles.runningLeft}>
+                      <span
+                        className={`${styles.liveChip} ${isGen ? styles.liveChipGen : ""}`}
+                      >
+                        <span className={styles.liveDot} />
+                        {isGen ? "Generating" : "Analyzing"}
+                      </span>
+                      <p className={styles.runningName}>{task.session_name}</p>
+                    </div>
+                    <div className={styles.runningRight}>
+                      <span className={styles.runningPct}>
+                        {task.progress}%
+                      </span>
+                      <button
+                        className={styles.iconBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/project/${task.session_id}`);
+                        }}
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        className={styles.iconBtnDanger}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedId(task.session_id);
+                          setShowDeleteModal(true);
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className={styles.rightGroup}>
-                    <span className={styles.progressText}>
-                      {task.progress}%{" "}
-                      {isAnalyzing && (
-                        <span className={styles.working}>{task.status}</span>
-                      )}
-                    </span>
-                    <button
-                      className={styles.viewBtn}
-                      onClick={() => router.push(`/project/${task.session_id}`)}
+                  <div className={styles.runningBar}>
+                    <div
+                      className={`${styles.runningFill} ${isGen ? styles.fillGen : styles.fillAnalyze}`}
+                      style={{
+                        width: task.progress === 0 ? "4%" : `${task.progress}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── THREE COLUMNS ── */}
+      <div className={styles.columns}>
+        {/* ANALYZED */}
+        {analysis_history.length > 0 && (
+          <div className={styles.col}>
+            <div className={styles.colHead}>
+              <span
+                className={styles.colDot}
+                style={{ background: "#22c55e" }}
+              />
+              <span className={styles.colTitle}>Analyzed</span>
+              <span className={styles.colCount}>{analysis_history.length}</span>
+            </div>
+            <div className={styles.cardStack}>
+              {analysis_history.map((item: any) => (
+                <div
+                  key={item.session_id}
+                  className={styles.card}
+                  onClick={() => router.push(`/project/${item.session_id}`)}
+                >
+                  <div className={styles.cardCover}>
+                    <Image
+                      src={getCoverUrl(item.cover)}
+                      alt=""
+                      fill
+                      className={styles.coverImg}
+                      unoptimized
+                    />
+                    <div className={styles.coverOverlay} />
+                    <span
+                      className={styles.cardStatusChip}
+                      style={{
+                        background: "rgba(34,197,94,0.2)",
+                        color: "#86efac",
+                        borderColor: "rgba(34,197,94,0.35)",
+                      }}
                     >
-                      <Eye size={16} /> View Detail
-                    </button>
+                      Analyzed
+                    </span>
+                  </div>
+                  <div className={styles.cardBody}>
+                    <p className={styles.cardName}>{item.session_name}</p>
+                    <p className={styles.cardDate}>
+                      {formatDate(item.analysis_finished_at)}
+                    </p>
+                  </div>
+                  <div className={styles.cardFooter}>
                     <button
-                      className={styles.deleteBtn}
+                      className={styles.primaryBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedId(task.session_id);
+                        router.push(
+                          `/project/${item.session_id}/summary/generate`,
+                        );
+                      }}
+                    >
+                      <Star size={13} /> Generate
+                    </button>
+                    <button
+                      className={styles.ghostBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/project/${item.session_id}`);
+                      }}
+                    >
+                      <Eye size={13} />
+                    </button>
+                    <button
+                      className={styles.dangerBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(item.session_id);
                         setShowDeleteModal(true);
                       }}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
-                <div className={styles.progressBarWrapper}>
-                  <div
-                    className={`${styles.progressBar} ${isAnalyzing ? styles.progressActive : ""}`}
-                    style={{
-                      width:
-                        task.progress === 0 && isAnalyzing
-                          ? "15%"
-                          : `${task.progress}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
+              ))}
+            </div>
+          </div>
+        )}
 
-      {/* ================= ANALYSIS HISTORY ================= */}
-      {analysis_history.length > 0 && (
-        <>
-          <h1 className={styles.title}>Analysis History</h1>
-          <div className={styles.grid}>
-            {analysis_history.map((item) => (
-              <div
-                key={item.session_id}
-                className={styles.expandCard}
-                onClick={() => router.push(`/project/${item.session_id}`)}
-              >
-                <div className={styles.cardContent}>
-                  <div className={styles.coverWrapper}>
+        {/* GENERATED */}
+        {generation_history.length > 0 && (
+          <div className={styles.col}>
+            <div className={styles.colHead}>
+              <span
+                className={styles.colDot}
+                style={{ background: "#3b82f6" }}
+              />
+              <span className={styles.colTitle}>Generated</span>
+              <span className={styles.colCount}>
+                {generation_history.length}
+              </span>
+            </div>
+            <div className={styles.cardStack}>
+              {generation_history.map((item: any) => (
+                <div
+                  key={item.session_id}
+                  className={styles.card}
+                  onClick={() => router.push(`/project/${item.session_id}`)}
+                >
+                  <div className={styles.cardCover}>
                     <Image
                       src={getCoverUrl(item.cover)}
-                      alt={item.session_name}
+                      alt=""
                       fill
                       className={styles.coverImg}
                       unoptimized
                     />
+                    <div className={styles.coverOverlay} />
+                    <span
+                      className={styles.cardStatusChip}
+                      style={{
+                        background: "rgba(59,130,246,0.2)",
+                        color: "#93c5fd",
+                        borderColor: "rgba(59,130,246,0.35)",
+                      }}
+                    >
+                      v{item.version}
+                    </span>
+                    {/* Play overlay */}
+                    <button
+                      className={styles.playOverlay}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedVideo(item);
+                        setShowVideoModal(true);
+                      }}
+                    >
+                      <Play size={22} fill="white" />
+                    </button>
                   </div>
-                  <div className={styles.infoSection}>
-                    <h3 className={styles.cardTitle}>{item.session_name}</h3>
-                    <p className={styles.status}>Status: {item.status}</p>
-                    <div className={styles.extraInfo}>
-                      <p>Create: {formatDate(item.created_at)}</p>
-                      <p>Finish: {formatDate(item.analysis_finished_at)}</p>
-                    </div>
+                  <div className={styles.cardBody}>
+                    <p className={styles.cardName}>{item.session_name}</p>
+                    <p className={styles.cardDate}>
+                      {formatDate(item.generation_finished_at)}
+                    </p>
+                    <p className={styles.cardMeta}>{item.file_size} MB</p>
+                  </div>
+                  <div className={styles.cardFooter}>
+                    <button
+                      className={styles.primaryBtn}
+                      style={{
+                        background: "rgba(59,130,246,0.15)",
+                        borderColor: "rgba(59,130,246,0.35)",
+                        color: "#93c5fd",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedVideo(item);
+                        setShowVideoModal(true);
+                      }}
+                    >
+                      <Play size={13} /> Watch
+                    </button>
+                    <button
+                      className={styles.ghostBtn}
+                      onClick={(e) =>
+                        handleDownload(e, item.session_id, item.video_id)
+                      }
+                    >
+                      <Download size={13} />
+                    </button>
+                    <button
+                      className={styles.dangerBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(item.session_id);
+                        setShowDeleteModal(true);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.generateBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(
-                        `/project/${item.session_id}/summary/generate`,
-                      );
-                    }}
-                  >
-                    <Star size={16} /> Generate Video
-                  </button>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(item.session_id);
-                      setShowDeleteModal(true);
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </>
-      )}
+        )}
 
-      {/* ================= GENERATION HISTORY ================= */}
-      {generation_history.length > 0 && (
-        <>
-          <h1 className={styles.title}>Generation History</h1>
-          <div className={styles.grid}>
-            {generation_history.map((item) => (
-              <div
-                key={item.session_id}
-                className={styles.expandCard}
-                onClick={() => router.push(`/project/${item.session_id}`)}
-              >
-                <div className={styles.cardContent}>
-                  <div className={styles.coverWrapper}>
+        {/* FAILED */}
+        {failed_history.length > 0 && (
+          <div className={styles.col}>
+            <div className={styles.colHead}>
+              <span
+                className={styles.colDot}
+                style={{ background: "#ef4444" }}
+              />
+              <span className={styles.colTitle}>Failed</span>
+              <span className={styles.colCount}>{failed_history.length}</span>
+            </div>
+            <div className={styles.cardStack}>
+              {failed_history.map((item: any) => (
+                <div
+                  key={item.session_id}
+                  className={`${styles.card} ${styles.cardFailed}`}
+                  onClick={() => router.push(`/project/${item.session_id}`)}
+                >
+                  <div className={styles.cardCover}>
                     <Image
                       src={getCoverUrl(item.cover)}
-                      alt={item.session_name}
+                      alt=""
                       fill
                       className={styles.coverImg}
                       unoptimized
                     />
-                  </div>
-                  <div className={styles.infoSection}>
-                    <h3 className={styles.cardTitle}>{item.session_name}</h3>
-                    <p className={styles.version}>Version - {item.version}</p>
-                    <div className={styles.extraInfo}>
-                      <p>Create: {formatDate(item.created_at)}</p>
-                      <p>Finish: {formatDate(item.generation_finished_at)}</p>
-                      <p>Storage: {item.file_size} MB</p>
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.watchBtn}
-                    onClick={(e) => handleWatchVideo(e, item)}
-                  >
-                    <Play size={18} /> Watch The Video
-                  </button>
-                  <button
-                    className={styles.downloadBtn}
-                    onClick={(e) =>
-                      handleDownload(e, item.session_id, item.video_id)
-                    }
-                  >
-                    <Download size={18} />
-                  </button>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(item.session_id);
-                      setShowDeleteModal(true);
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* ================= FAILED HISTORY ================= */}
-      {failed_history.length > 0 && (
-        <>
-          <h1 className={styles.title}>Failed History</h1>
-          <div className={styles.grid}>
-            {failed_history.map((item) => (
-              <div
-                key={item.session_id}
-                className={styles.expandCard}
-                style={{ opacity: 0.7 }}
-                onClick={() => router.push(`/project/${item.session_id}`)}
-              >
-                <div className={styles.cardContent}>
-                  <div className={styles.coverWrapper}>
-                    <Image
-                      src={getCoverUrl(item.cover)}
-                      alt={item.session_name}
-                      fill
-                      className={styles.coverImg}
-                      unoptimized
+                    <div
+                      className={`${styles.coverOverlay} ${styles.coverOverlayFailed}`}
                     />
+                    <span
+                      className={styles.cardStatusChip}
+                      style={{
+                        background: "rgba(239,68,68,0.2)",
+                        color: "#fca5a5",
+                        borderColor: "rgba(239,68,68,0.35)",
+                      }}
+                    >
+                      Failed
+                    </span>
                   </div>
-                  <div className={styles.infoSection}>
-                    <h3 className={styles.cardTitle}>{item.session_name}</h3>
-                    <p className={styles.failedStatus}>Status: Failed</p>
-                    <div className={styles.extraInfo}>
-                      <p>Create: {formatDate(item.created_at)}</p>
-                    </div>
+                  <div className={styles.cardBody}>
+                    <p className={styles.cardName}>{item.session_name}</p>
+                    <p className={styles.cardDate}>
+                      {formatDate(item.created_at)}
+                    </p>
+                  </div>
+                  <div className={styles.cardFooter}>
+                    <button
+                      className={styles.retryBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRetryTarget({
+                          sessionId: item.session_id,
+                          sessionName: item.session_name,
+                        });
+                        setShowRetryModal(true);
+                      }}
+                    >
+                      <RotateCcw size={13} /> Retry
+                    </button>
+                    <button
+                      className={styles.ghostBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/project/${item.session_id}`);
+                      }}
+                    >
+                      <Eye size={13} />
+                    </button>
+                    <button
+                      className={styles.dangerBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(item.session_id);
+                        setShowDeleteModal(true);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(item.session_id);
-                      setShowDeleteModal(true);
-                    }}
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
 
       {/* Modals */}
       {showDeleteModal && (
@@ -399,6 +544,20 @@ export default function ProjectPage() {
               be undone.
             </p>
           }
+        />
+      )}
+
+      {showRetryModal && retryTarget && (
+        <SharePopUpRetry
+          isOpen={showRetryModal}
+          onClose={() => {
+            setShowRetryModal(false);
+            setRetryTarget(null);
+          }}
+          onConfirm={handleConfirmRetry}
+          isLoading={retryMutation.isPending}
+          sessionName={retryTarget.sessionName}
+          warningHighlight="การ Retry ไม่ใช่การทำต่อจากการดำเนินงานล่าสุด แต่เป็นการลบการวิเคราะห์เดิมทิ้ง แล้ว สร้างใหม่"
         />
       )}
 

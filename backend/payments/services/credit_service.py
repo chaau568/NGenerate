@@ -8,7 +8,7 @@ class CreditService:
 
     @staticmethod
     @transaction.atomic
-    def lock_credit(user, amount, session, log_type):
+    def lock_credit(user, amount, session, log_type, session_name=None):
 
         wallet = UserCredit.objects.select_for_update().get(user=user)
 
@@ -21,13 +21,26 @@ class CreditService:
         CreditLog.objects.create(
             user=user,
             session=session,
+            session_name=session_name or (session.name if session else None),
             type=log_type,
             amount=-amount,
         )
 
     @staticmethod
     @transaction.atomic
-    def refund_credit(user, amount, session):
+    def complete_credit(user, amount, session, log_type, session_name=None):
+
+        CreditLog.objects.create(
+            user=user,
+            session=session,
+            session_name=session_name or (session.name if session else None),
+            type=log_type,
+            amount=amount,
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def refund_credit(user, amount, session, session_name=None):
 
         wallet = UserCredit.objects.select_for_update().get(user=user)
 
@@ -37,6 +50,7 @@ class CreditService:
         CreditLog.objects.create(
             user=user,
             session=session,
+            session_name=session_name or (session.name if session else None),
             type="refund",
             amount=amount,
         )

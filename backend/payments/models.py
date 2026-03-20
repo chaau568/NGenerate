@@ -1,8 +1,6 @@
 from django.db import models
 from django.core.validators import MinValueValidator
 from django.conf import settings
-from django.utils import timezone
-from datetime import timedelta
 
 
 class Package(models.Model):
@@ -103,6 +101,8 @@ class CreditLog(models.Model):
         on_delete=models.SET_NULL,
         related_name="credit_logs",
     )
+    
+    session_name = models.CharField(max_length=255, blank=True, null=True)
 
     type = models.CharField(max_length=30, choices=TYPE_CHOICES)
 

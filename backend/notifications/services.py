@@ -1,17 +1,29 @@
 from notifications.models import Notification
 
 
-def get_or_create_notification(user, session, task_type, message):
+def get_or_create_notification(user, session, task_type, message, generation_run=None):
 
-    notification, _ = Notification.objects.get_or_create(
-        user=user,
-        session=session,
-        task_type=task_type,
-        defaults={
-            "message": message,
-            "status": "processing",
-        },
-    )
+    if task_type == "generation" and generation_run:
+        notification, _ = Notification.objects.get_or_create(
+            generation_run=generation_run,
+            task_type="generation",
+            defaults={
+                "user": user,
+                "session": session,
+                "message": message,
+                "status": "processing",
+            },
+        )
+    else:
+        notification, _ = Notification.objects.get_or_create(
+            session=session,
+            task_type=task_type,
+            defaults={
+                "user": user,
+                "message": message,
+                "status": "processing",
+            },
+        )
 
     return notification
 

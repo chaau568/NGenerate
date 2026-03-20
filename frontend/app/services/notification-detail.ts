@@ -2,6 +2,9 @@ import { clientFetch } from "@/lib/client-fetch";
 
 export type ProcessingStepStatus =
     | "pending"
+    | "processing"
+    | "success"
+    | "failed"
     | "analyzed"
     | "analyzing"
     | "generated"
@@ -24,6 +27,7 @@ export type NotificationStatus =
 
 export type NotificationDetail = {
     id: number;
+    task_type: string;
     task_name: string;
     status: NotificationStatus;
     message: string;
@@ -35,7 +39,13 @@ export type NotificationDetail = {
         steps: ProcessingStep[];
     } | null;
     session_info: any;
-    novel_info: any;
+    novel_info: {
+        title: string;
+    } | null;
+
+    session_id?: number | null;
+    session_name?: string | null;
+    novel_id: number | null;
 };
 
 export const fetchNotificationDetail = async (

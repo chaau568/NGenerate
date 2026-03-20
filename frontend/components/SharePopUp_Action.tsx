@@ -1,7 +1,7 @@
 "use client";
 
-import styles from "./SharePopUp_Action.module.css";
 import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import styles from "./SharePopUp_Action.module.css";
 
 interface SharePopUpActionProps {
   isOpen: boolean;
@@ -14,6 +14,24 @@ interface SharePopUpActionProps {
   onSecondary?: () => void;
   onClose: () => void;
 }
+
+const CONFIG = {
+  success: {
+    Icon: CheckCircle2,
+    iconClass: "iconSuccess",
+    btnClass: "btnSuccess",
+  },
+  error: {
+    Icon: XCircle,
+    iconClass: "iconError",
+    btnClass: "btnError",
+  },
+  session: {
+    Icon: AlertTriangle,
+    iconClass: "iconSession",
+    btnClass: "btnSession",
+  },
+} as const;
 
 export default function SharePopUpAction({
   isOpen,
@@ -28,36 +46,35 @@ export default function SharePopUpAction({
 }: SharePopUpActionProps) {
   if (!isOpen) return null;
 
-  const renderIcon = () => {
-    switch (type) {
-      case "success":
-        return <CheckCircle2 size={48} className={styles.successIcon} />;
-      case "error":
-        return <XCircle size={48} className={styles.errorIcon} />;
-      case "session":
-        return <AlertTriangle size={48} className={styles.sessionIcon} />;
-    }
-  };
+  const { Icon, iconClass, btnClass } = CONFIG[type];
 
   return (
-    <div className={styles.overlay}>
-      <div className={styles.modal}>
-        {renderIcon()}
-        <h2>{title}</h2>
-        {description && <p>{description}</p>}
-
-        <div className={styles.actions}>
-          {secondaryText && (
-            <button onClick={onSecondary} className={styles.secondaryBtn}>
-              {secondaryText}
-            </button>
-          )}
-          {primaryText && (
-            <button onClick={onPrimary} className={styles.primaryBtn}>
-              {primaryText}
-            </button>
-          )}
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={`${styles.modalIcon} ${styles[iconClass]}`}>
+          <Icon size={24} />
         </div>
+
+        <h3 className={styles.title}>{title}</h3>
+        {description && <p className={styles.message}>{description}</p>}
+
+        {(primaryText || secondaryText) && (
+          <div className={styles.modalActions}>
+            {secondaryText && (
+              <button className={styles.secondaryBtn} onClick={onSecondary}>
+                {secondaryText}
+              </button>
+            )}
+            {primaryText && (
+              <button
+                className={`${styles.primaryBtn} ${styles[btnClass]}`}
+                onClick={onPrimary}
+              >
+                {primaryText}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

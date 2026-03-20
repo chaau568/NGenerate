@@ -110,7 +110,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATABASES = {
     "default": dj_database_url.config(
         default=env("DATABASE_URL"),
-        conn_max_age=600,
+        conn_max_age=0,
         ssl_require=True,
     )
 }
@@ -328,3 +328,11 @@ BASE_FILE_URL=f"{AI_API_URL}/files"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = USER_DATA_ROOT
+
+
+# -------------------------------------------------
+# THREAD CONFIG
+# -------------------------------------------------
+
+GENERATION_MAX_IMAGE_WORKERS = int(os.environ.get("GENERATION_MAX_IMAGE_WORKERS", 2))
+GENERATION_MAX_VOICE_WORKERS = int(os.environ.get("GENERATION_MAX_VOICE_WORKERS", 3))

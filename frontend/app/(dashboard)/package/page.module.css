@@ -1,107 +1,272 @@
+/* ── BASE ── */
 .container {
-  padding: 16px 24px 40px;
-  color: white;
-  max-width: 1300px;
+  padding: 48px 32px 80px;
+  max-width: 900px;
   margin: 0 auto;
+  color: #f0efe9;
+}
+
+/* ── LOADING ── */
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 80px 40px;
+  color: rgba(240, 239, 233, 0.3);
+  font-size: 13px;
+}
+
+.loadingBar {
+  width: 200px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loadingFill {
+  height: 100%;
+  width: 40%;
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 2px;
+  animation: loadSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes loadSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* ── HEAD ── */
+.headSection {
   text-align: center;
+  margin-bottom: 52px;
+}
+
+.eyebrow {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #60a5fa;
+  margin: 0 0 14px;
 }
 
 .title {
-  font-size: 36px;
-  font-weight: 700;
-  margin-bottom: 48px;
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  margin: 0 0 14px;
+  color: #f0efe9;
+  line-height: 1.15;
 }
 
+.subtitle {
+  font-size: 15px;
+  color: rgba(240, 239, 233, 0.45);
+  margin: 0 auto;
+  max-width: 460px;
+  line-height: 1.6;
+}
+
+/* ── GRID ── */
 .grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px;
-  align-items: stretch;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
+/* ── CARD ── */
 .card {
-  border-radius: 24px;
-  padding: 48px 32px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  padding: 28px 24px;
   display: flex;
   flex-direction: column;
-  position: relative;
-  transition: transform 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  /* ใช้สีเดียวกับ Pro ทั้งหมด */
-  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  gap: 0;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
 }
-
 .card:hover {
-  transform: translateY(-10px);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-3px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
 }
 
-.tag {
-  font-size: 14px;
+.cardFeatured {
+  background: rgba(37, 99, 235, 0.07);
+  border-color: rgba(37, 99, 235, 0.35);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+.cardFeatured:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow:
+    0 20px 48px rgba(37, 99, 235, 0.2),
+    0 0 0 1px rgba(37, 99, 235, 0.3);
+}
+
+.featuredBadge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  margin-bottom: 16px;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: #2563eb;
+  color: #fff;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
 
-.packageName {
-  font-size: 42px;
-  font-weight: 800;
-  margin-bottom: 8px;
+/* ── CARD TOP ── */
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
 }
 
-.price {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 32px;
-}
-
-.price span {
-  font-size: 16px;
-  font-weight: 400;
-  opacity: 0.8;
-}
-
-.buyBtn {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
-  margin-bottom: 32px;
+.iconWrap {
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
-  background: #2563eb;
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(240, 239, 233, 0.6);
 }
 
+.iconWrapFeatured {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #93c5fd;
+}
+
+.cardTag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(240, 239, 233, 0.5);
+}
+
+/* ── NAME & PRICE ── */
+.packageName {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  margin: 0 0 12px;
+  color: #f0efe9;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-bottom: 22px;
+}
+
+.currency {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(240, 239, 233, 0.6);
+  margin-top: 4px;
+}
+
+.priceNum {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  color: #f0efe9;
+  line-height: 1;
+}
+
+.priceSuffix {
+  font-size: 14px;
+  color: rgba(240, 239, 233, 0.35);
+  margin-left: 2px;
+}
+
+/* ── BUTTON ── */
+.buyBtn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0efe9;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  margin-bottom: 22px;
+}
 .buyBtn:hover {
-  filter: brightness(1.1);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
+.buyBtnFeatured {
+  background: #2563eb;
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
+}
+.buyBtnFeatured:hover {
+  background: #1d4ed8;
+}
+
+/* ── DIVIDER ── */
+.divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  margin-bottom: 20px;
+}
+
+/* ── FEATURES ── */
 .featureList {
   list-style: none;
   padding: 0;
   margin: 0;
-  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
 }
 
 .featureItem {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-  font-size: 15px;
-  font-weight: 600;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(240, 239, 233, 0.7);
+  line-height: 1.5;
 }
 
-.loading {
-  padding: 100px;
-  text-align: center;
-  color: #94a3b8;
+.featureIcon {
+  flex-shrink: 0;
+  color: #22c55e;
+  margin-top: 1px;
 }

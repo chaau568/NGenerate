@@ -3,7 +3,7 @@
 import { clientFetch } from "@/lib/client-fetch";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, BookOpen, X } from "lucide-react";
 import SharePopUpSuccess from "@/components/SharePopUp_Success";
 import styles from "./page.module.css";
 import Image from "next/image";
@@ -24,13 +24,11 @@ interface LibraryData {
 export default function LibraryPage() {
   const [data, setData] = useState<LibraryData | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const fetchLibrary = async () => {
@@ -50,6 +48,14 @@ export default function LibraryPage() {
     fetchLibrary();
   }, []);
 
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -59,15 +65,9 @@ export default function LibraryPage() {
   };
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-
-    if (showSuccessModal) {
-      timer = setTimeout(() => {
-        handleSuccessClose();
-      }, 5000);
-    }
-
-    return () => clearTimeout(timer);
+    if (!showSuccessModal) return;
+    const t = setTimeout(handleSuccessClose, 5000);
+    return () => clearTimeout(t);
   }, [showSuccessModal]);
 
   const handleSuccessClose = () => {
@@ -78,23 +78,16 @@ export default function LibraryPage() {
   const handleCreateNovel = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-
     setIsCreating(true);
     try {
       const formData = new FormData();
       formData.append("title", newTitle);
-      if (selectedFile) {
-        formData.append("cover", selectedFile);
-      }
-
+      if (selectedFile) formData.append("cover", selectedFile);
       const res = await clientFetch("/api/library/create", {
         method: "POST",
         body: formData,
       });
-
       if (res.ok) {
-        const result = await res.json();
-        console.log("Created successfully:", result);
         setNewTitle("");
         setSelectedFile(null);
         setPreviewUrl(null);
@@ -105,7 +98,7 @@ export default function LibraryPage() {
         alert(err.error || err.detail || "Create failed");
       }
     } catch (error) {
-      console.error("Client Fetch Error:", error);
+      console.error(error);
     } finally {
       setIsCreating(false);
     }
@@ -118,60 +111,105 @@ export default function LibraryPage() {
   };
 
   if (loading)
-    return <div className={styles.statusText}>Loading Library...</div>;
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingBar}>
+          <div className={styles.loadingFill} />
+        </div>
+        <span>Loading Library...</span>
+      </div>
+    );
 
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.titleGroup}>
-          <h1>My Novel Library</h1>
-          <span className={styles.badge}>{data?.total_novels || 0} novels</span>
+          <h1 className={styles.pageTitle}>Library</h1>
+          <span className={styles.badge}>{data?.total_novels || 0}</span>
         </div>
         <button className={styles.addBtn} onClick={() => setIsModalOpen(true)}>
-          <Plus size={32} strokeWidth={2.5} />
-          <span>Add New Novel</span>
+          <Plus size={16} strokeWidth={2.5} />
+          New Novel
         </button>
       </header>
 
-      {/* Grid Section */}
-      <div className={styles.grid}>
-        {data?.chapters.map((novel) => (
-          <Link
-            href={`/library/${novel.id}`}
-            key={novel.id}
-            className={styles.cardLink}
-          >
-            <div className={styles.card}>
-              <div className={styles.coverWrapper}>
-                <Image
-                  src={getCoverUrl(novel.cover)}
-                  alt={novel.title}
-                  fill
-                  className={styles.coverImg}
-                  unoptimized
-                  loading="eager"
-                  priority
-                />
-              </div>
-              <div className={styles.cardInfo}>
-                <h3 className={styles.novelTitle}>{novel.title}</h3>
-                <p className={styles.novelChapters}>
-                  {novel.analyzed_chapters}/{novel.total_chapters} Chapters
-                </p>
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {!data?.chapters || data.chapters.length === 0 ? (
+        <div className={styles.emptyState}>
+          <BookOpen size={48} strokeWidth={1.2} className={styles.emptyIcon} />
+          <p className={styles.emptyTitle}>No novels yet</p>
+          <p className={styles.emptyDesc}>
+            Create your first novel to get started.
+          </p>
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {data.chapters.map((novel) => {
+            const progress =
+              novel.total_chapters > 0
+                ? Math.round(
+                    (novel.analyzed_chapters / novel.total_chapters) * 100,
+                  )
+                : 0;
+            return (
+              <Link
+                href={`/library/${novel.id}`}
+                key={novel.id}
+                className={styles.cardLink}
+              >
+                <div className={styles.card}>
+                  <div className={styles.coverWrapper}>
+                    <Image
+                      src={getCoverUrl(novel.cover)}
+                      alt={novel.title}
+                      fill
+                      className={styles.coverImg}
+                      unoptimized
+                      loading="eager"
+                      priority
+                    />
+                    {novel.analyzed_chapters > 0 && (
+                      <div className={styles.progressPill}>
+                        {novel.analyzed_chapters}/{novel.total_chapters}
+                      </div>
+                    )}
+                  </div>
+                  <div className={styles.cardInfo}>
+                    <h3 className={styles.novelTitle}>{novel.title}</h3>
+                    <p className={styles.novelMeta}>
+                      {novel.total_chapters} chapters
+                    </p>
+                    {novel.total_chapters > 0 && (
+                      <div className={styles.progressBar}>
+                        <div
+                          className={styles.progressFill}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* CREATE MODAL */}
       {isModalOpen && (
-        <div className={styles.modalOverlay}>
-          <div className={styles.modalContent}>
-            <h2>Create New Novel</h2>
+        <div className={styles.overlay} onClick={() => setIsModalOpen(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2>New Novel</h2>
+              <button
+                className={styles.closeBtn}
+                onClick={() => setIsModalOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
             <form onSubmit={handleCreateNovel}>
-              {/* เพิ่มส่วน Upload Cover ตรงนี้ */}
-              <div className={styles.uploadSection}>
+              <div className={styles.uploadRow}>
                 <label className={styles.uploadBox}>
                   {previewUrl ? (
                     <Image
@@ -181,12 +219,11 @@ export default function LibraryPage() {
                       className={styles.previewImg}
                       unoptimized
                       loading="eager"
-                      priority
                     />
                   ) : (
                     <div className={styles.uploadPlaceholder}>
-                      <span className={styles.plusIconLarge}>+</span>
-                      <p>Upload Cover</p>
+                      <Plus size={24} strokeWidth={1.5} />
+                      <span>Cover</span>
                     </div>
                   )}
                   <input
@@ -196,20 +233,22 @@ export default function LibraryPage() {
                     hidden
                   />
                 </label>
+
+                <div className={styles.uploadRight}>
+                  <label className={styles.fieldLabel}>Novel Title</label>
+                  <input
+                    autoFocus
+                    className={styles.input}
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="Enter title..."
+                    required
+                  />
+                </div>
               </div>
 
-              <label className={styles.modalLabel}>Novel Title</label>
-              <input
-                autoFocus
-                className={styles.modalInput}
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter novel title..."
-                required
-              />
-
-              <div className={styles.modalActions}>
+              <div className={styles.modalFooter}>
                 <button
                   type="button"
                   className={styles.cancelBtn}
@@ -223,7 +262,7 @@ export default function LibraryPage() {
                 </button>
                 <button
                   type="submit"
-                  className={styles.confirmBtn}
+                  className={styles.createBtn}
                   disabled={isCreating}
                 >
                   {isCreating ? "Creating..." : "Create Novel"}
@@ -237,7 +276,7 @@ export default function LibraryPage() {
       <SharePopUpSuccess
         isOpen={showSuccessModal}
         onClose={handleSuccessClose}
-        title="Upload Success!"
+        title="Novel Created!"
       />
     </div>
   );

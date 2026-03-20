@@ -4,6 +4,7 @@ import { clientFetch } from "@/lib/client-fetch";
 import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import styles from "./page.module.css";
 
 declare global {
@@ -39,7 +40,7 @@ export default function LoginPage() {
     setFocus,
   } = useForm<OtpForm>();
 
-  // ── Normal Login ─────────────────────────────────────────
+  // ── Normal Login ──────────────────────────────────────────
   const onSubmit = async (data: LoginForm) => {
     try {
       const res = await clientFetch("/api/login", {
@@ -70,18 +71,16 @@ export default function LoginPage() {
         { theme: "outline", size: "large", width: 340 },
       );
     };
-
     const interval = setInterval(() => {
       if (window.google) {
         loadGoogle();
         clearInterval(interval);
       }
     }, 300);
-
     return () => clearInterval(interval);
   }, []);
 
-  // ── Google Step 1: ส่ง id_token → รอ OTP ────────────────
+  // ── Google Step 1 ─────────────────────────────────────────
   const handleGoogleResponse = async (response: any) => {
     try {
       const res = await clientFetch("/api/login-google", {
@@ -90,12 +89,8 @@ export default function LoginPage() {
         body: JSON.stringify({ id_token: response.credential }),
       });
       const result = await res.json();
-      console.log("google login result:", result);
       if (!res.ok) throw result;
-
-      // ✅ เก็บใน sessionStorage แทน state/ref
       sessionStorage.setItem("otp_email", result.email);
-
       googleEmailRef.current = result.email;
       setGoogleEmail(result.email);
       setStep("otp");
@@ -105,29 +100,23 @@ export default function LoginPage() {
     }
   };
 
-  // ── Google Step 2: verify OTP → JWT ─────────────────────
+  // ── Google Step 2: verify OTP ─────────────────────────────
   const onOtpSubmit = async (data: OtpForm) => {
-    // ✅ อ่านจาก sessionStorage เป็น fallback
     const email =
       googleEmailRef.current || sessionStorage.getItem("otp_email") || "";
-
     setOtpError("");
     setOtpLoading(true);
-
     try {
-      const res = await clientFetch("/api/verify-otp", {
+      const res = await clientFetch("/api/login-google/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp: data.otp }),
       });
       const result = await res.json();
-
       if (!res.ok) {
         setOtpError(result.error || "Invalid OTP. Please try again.");
         return;
       }
-
-      // ✅ ล้างหลัง verify สำเร็จ
       sessionStorage.removeItem("otp_email");
       router.push("/library");
     } catch {
@@ -137,151 +126,182 @@ export default function LoginPage() {
     }
   };
 
-  // ── restore state จาก sessionStorage เผื่อ page reload ──
+  // ── Restore from sessionStorage ───────────────────────────
   useEffect(() => {
-    const savedEmail = sessionStorage.getItem("otp_email");
-    if (savedEmail) {
-      googleEmailRef.current = savedEmail;
-      setGoogleEmail(savedEmail);
+    const saved = sessionStorage.getItem("otp_email");
+    if (saved) {
+      googleEmailRef.current = saved;
+      setGoogleEmail(saved);
       setStep("otp");
     }
   }, []);
 
-  // ── Single JSX block — ป้องกัน unmount/remount ──────────
   return (
-    <div className={styles.card}>
-      {/* Logo — แสดงทุก step */}
-      <div className={styles.logoContainer}>
-        <div className={styles.logoWrapper}>
-          <div className={styles.logoBox}>N</div>
+    <div className={styles.page}>
+      {/* Ambient glow orbs */}
+      <div className={styles.orb1} />
+      <div className={styles.orb2} />
+
+      <div className={styles.card}>
+        {/* ── Logo ── */}
+        <div className={styles.logo}>
+          <div className={styles.logoMark}>N</div>
           <span className={styles.logoText}>GENERATE</span>
         </div>
-      </div>
 
-      {/* ── Login Step ── */}
-      {step === "login" && (
-        <>
-          <h1 className={styles.title}>Welcome Back</h1>
-
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <label className={styles.label}>Email</label>
-            <input
-              className={styles.input}
-              type="email"
-              {...register("email", { required: "Email is required" })}
-            />
-            {errors.email && (
-              <p className={styles.error}>{errors.email.message}</p>
-            )}
-
-            <label className={styles.label}>Password</label>
-            <div className={styles.passwordWrapper}>
-              <input
-                className={styles.input}
-                type={showPassword ? "text" : "password"}
-                {...register("password", { required: "Password is required" })}
-              />
-              <button
-                type="button"
-                className={styles.toggleButton}
-                onMouseEnter={() => setShowPassword(true)}
-                onMouseLeave={() => setShowPassword(false)}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
+        {/* ══ LOGIN STEP ══ */}
+        {step === "login" && (
+          <>
+            <div className={styles.headGroup}>
+              <h1 className={styles.title}>Welcome back</h1>
+              <p className={styles.subtitle}>Sign in to continue creating</p>
             </div>
-            {errors.password && (
-              <p className={styles.error}>{errors.password.message}</p>
-            )}
 
-            <button
-              className={styles.button}
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Signing In..." : "Sign In"}
-            </button>
-          </form>
+            <form onSubmit={handleSubmit(onSubmit)} className={styles.form}>
+              {/* Email */}
+              <div className={styles.field}>
+                <label className={styles.label}>Email</label>
+                <input
+                  className={`${styles.input} ${errors.email ? styles.inputError : ""}`}
+                  type="email"
+                  placeholder="you@example.com"
+                  {...register("email", { required: "Email is required" })}
+                />
+                {errors.email && (
+                  <p className={styles.errorMsg}>{errors.email.message}</p>
+                )}
+              </div>
 
-          <div className={styles.googleContainer}>
-            <div id="googleButton" />
-          </div>
+              {/* Password */}
+              <div className={styles.field}>
+                <label className={styles.label}>Password</label>
+                <div className={styles.inputWrap}>
+                  <input
+                    className={`${styles.input} ${errors.password ? styles.inputError : ""}`}
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    {...register("password", {
+                      required: "Password is required",
+                    })}
+                  />
+                  <button
+                    type="button"
+                    className={styles.eyeBtn}
+                    onClick={() => setShowPassword((v) => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className={styles.errorMsg}>{errors.password.message}</p>
+                )}
+              </div>
 
-          <p className={styles.footerText}>
-            Don't have an account?{" "}
-            <span
-              className={styles.link}
-              onClick={() => router.push("/register")}
-            >
-              Create one for free
-            </span>
-          </p>
-        </>
-      )}
+              <button
+                className={styles.btn}
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <span className={styles.btnInner}>
+                    <span className={styles.spinner} /> Signing in…
+                  </span>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
 
-      {/* ── OTP Step ── */}
-      {step === "otp" && (
-        <>
-          <h1 className={styles.title}>Verify Your Email</h1>
+            {/* Divider */}
+            <div className={styles.divider}>
+              <span>or continue with</span>
+            </div>
 
-          <p
-            style={{
-              textAlign: "center",
-              color: "#94a3b8",
-              fontSize: 14,
-              marginBottom: 24,
-            }}
-          >
-            We sent a 6-digit OTP to
-            <br />
-            <strong style={{ color: "white" }}>{googleEmail}</strong>
-          </p>
+            <div className={styles.googleWrap}>
+              <div id="googleButton" />
+            </div>
 
-          <form onSubmit={handleOtpSubmit(onOtpSubmit)}>
-            <label className={styles.label}>OTP Code</label>
-            <input
-              className={styles.input}
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="000000"
-              style={{ textAlign: "center", fontSize: 24, letterSpacing: 8 }}
-              {...registerOtp("otp", {
-                required: "OTP is required",
-                pattern: {
-                  value: /^\d{6}$/,
-                  message: "OTP must be 6 digits",
-                },
-              })}
-            />
-            {(otpErrors.otp || otpError) && (
-              <p className={styles.error}>
-                {otpErrors.otp?.message || otpError}
+            <p className={styles.footer}>
+              Don&apos;t have an account?{" "}
+              <span
+                className={styles.footerLink}
+                onClick={() => router.push("/register")}
+              >
+                Create one for free
+              </span>
+            </p>
+          </>
+        )}
+
+        {/* ══ OTP STEP ══ */}
+        {step === "otp" && (
+          <>
+            <div className={styles.headGroup}>
+              <h1 className={styles.title}>Check your inbox</h1>
+              <p className={styles.subtitle}>
+                We sent a 6-digit code to
+                <br />
+                <strong className={styles.emailHighlight}>{googleEmail}</strong>
               </p>
-            )}
+            </div>
 
-            <button
-              className={styles.button}
-              type="submit"
-              disabled={otpLoading}
+            <form
+              onSubmit={handleOtpSubmit(onOtpSubmit)}
+              className={styles.form}
             >
-              {otpLoading ? "Verifying..." : "Verify OTP"}
-            </button>
-          </form>
+              <div className={styles.field}>
+                <label className={styles.label}>OTP Code</label>
+                <input
+                  className={`${styles.input} ${styles.otpInput} ${otpErrors.otp || otpError ? styles.inputError : ""}`}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="000000"
+                  {...registerOtp("otp", {
+                    required: "OTP is required",
+                    pattern: {
+                      value: /^\d{6}$/,
+                      message: "OTP must be 6 digits",
+                    },
+                  })}
+                />
+                {(otpErrors.otp || otpError) && (
+                  <p className={styles.errorMsg}>
+                    {otpErrors.otp?.message || otpError}
+                  </p>
+                )}
+              </div>
 
-          <p className={styles.footerText}>
-            <span
-              className={styles.link}
-              onClick={() => {
-                setStep("login");
-                setOtpError("");
-              }}
-            >
-              ← Back to login
-            </span>
-          </p>
-        </>
-      )}
+              <button
+                className={styles.btn}
+                type="submit"
+                disabled={otpLoading}
+              >
+                {otpLoading ? (
+                  <span className={styles.btnInner}>
+                    <span className={styles.spinner} /> Verifying…
+                  </span>
+                ) : (
+                  "Verify Code"
+                )}
+              </button>
+            </form>
+
+            <p className={styles.footer}>
+              <span
+                className={styles.footerLink}
+                onClick={() => {
+                  setStep("login");
+                  setOtpError("");
+                }}
+              >
+                ← Back to login
+              </span>
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

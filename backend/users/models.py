@@ -130,7 +130,10 @@ class UserCredit(models.Model):
 # เก็บ OTP สำหรับ Google Login 2FA
 class OTPCode(models.Model):
 
-    PURPOSE_CHOICES = (("google_login", "Google Login 2FA"),)  # ใช้ตอน login ด้วย Google
+    PURPOSE_CHOICES = (
+        ("google_login", "Google Login 2FA"),
+        ("register", "Register Verification"),
+    )
 
     email = models.EmailField()  # email ที่ส่ง OTP ไป
     code = models.CharField(max_length=10)  # ตัวเลข 6 หลัก

@@ -14,13 +14,9 @@ def process_uploaded_file_task(self, novel_id, file_path, notification_id):
     notification = Notification.objects.get(id=notification_id)
 
     try:
-
         novel = Novel.objects.get(id=novel_id)
 
         url = f"{settings.AI_API_URL}/preprocess/novel"
-
-        print("UPLOAD FILE:", file_path)
-        print("FILE SIZE:", os.path.getsize(file_path))
 
         with open(file_path, "rb") as f:
             resp = requests.post(url, files={"file": f}, timeout=settings.AI_TIMEOUT)
@@ -53,8 +49,5 @@ def process_uploaded_file_task(self, novel_id, file_path, notification_id):
         notification.status = "error"
         notification.message = str(e)
         notification.save(update_fields=["status", "message", "updated_at"])
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
         return "failed"

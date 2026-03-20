@@ -44,7 +44,7 @@ def omise_webhook(request):
     if not webhook_secret:
         logger.error("OMISE_WEBHOOK_SECRET not configured")
         return HttpResponse("Server misconfigured", status=500)
-    
+
     webhook_secret_bytes = base64.b64decode(webhook_secret)
 
     message = f"{timestamp}.{raw_body.decode('utf-8')}".encode("utf-8")
@@ -282,36 +282,73 @@ def my_payments(request):
 def my_credit_logs(request):
     logs = (
         CreditLog.objects.filter(user=request.user)
-        .select_related("session", "transaction")
+        .select_related("session", "transaction", "transaction__package")
         .order_by("-created_at")
     )
 
-    def map_status(log_type):
-        if "lock" in log_type:
-            return "processing"
-        if "complete" in log_type or log_type == "refund" or log_type == "topup":
+    ACTION_MAP = {
+        "analysis_lock": "Analyze",
+        "analysis_complete": "Analyze",
+        "generation_lock": "Generate",
+        "generation_complete": "Generate",
+        "topup": "Topup",
+        "refund": "Refund",
+    }
+
+    SESSION_STATUS_MAP = {
+        "analyzing": "processing",
+        "analyzed": "completed",
+        "generating": "processing",
+        "generated": "completed",
+        "failed": "failed",
+        "draft": "processing",
+    }
+
+    def map_status(log):
+        t = log.type
+
+        if t in ("analysis_complete", "generation_complete"):
             return "completed"
+
+        if t in ("analysis_lock", "generation_lock"):
+            session = log.session
+            if session is None:
+                return "completed"
+            return SESSION_STATUS_MAP.get(session.status, "processing")
+
+        if t == "refund":
+            return "completed"
+
+        if t == "topup":
+            return "completed"
+
         return "unknown"
 
-    def map_action(log_type):
-        mapping = {
-            "analysis_lock": "Analyze",
-            "analysis_complete": "Analyze",
-            "generation_lock": "Generate",
-            "generation_complete": "Generate",
-            "topup": "Topup",
-            "refund": "Refund",
-        }
-        return mapping.get(log_type, log_type)
+    def map_details(log):
+        t = log.type
+
+        if t == "topup":
+            if log.transaction and log.transaction.package:
+                return log.transaction.package.name
+            return "-"
+
+        session_name = (
+            (log.session.name if log.session else None) or log.session_name or "-"
+        )
+
+        if t == "refund":
+            return f"{session_name} (refunded)"
+
+        return session_name
 
     data = [
         {
             "id": log.id,
             "date_time": log.created_at,
-            "activate": map_action(log.type),
-            "details": (log.session.name if log.session and log.session.name else "-"),
+            "activate": ACTION_MAP.get(log.type, log.type),
+            "details": map_details(log),
             "credits": log.amount,
-            "status": map_status(log.type),
+            "status": map_status(log),
         }
         for log in logs
     ]

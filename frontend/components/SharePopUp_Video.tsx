@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, X } from "lucide-react";
+import { Play, X, Clock, HardDrive, Calendar } from "lucide-react";
 import styles from "./SharePopUp_Video.module.css";
 
 interface SharePopUpVideoProps {
@@ -30,47 +30,49 @@ export default function SharePopUpVideo({
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className={styles.modalHeader}>
+        <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <div className={styles.playIconWrapper}>
-              <Play size={18} fill="#3b82f6" color="#3b82f6" />
+            <div className={styles.playIcon}>
+              <Play size={15} fill="currentColor" />
             </div>
-            <div className={styles.titleGroup}>
-              <h3>{videoData.session_name}</h3>
-              <p>version {videoData.version}</p>
+            <div>
+              <h3 className={styles.sessionName}>{videoData.session_name}</h3>
+              <p className={styles.version}>Version {videoData.version}</p>
             </div>
           </div>
-
-          {/* ปุ่ม X ขวาสุด */}
-          <button className={styles.closeBtn} onClick={onClose} title="Close">
-            <X size={16} />
+          <button className={styles.closeBtn} onClick={onClose}>
+            <X size={15} />
           </button>
         </div>
 
-        {/* Video Player */}
-        <div className={styles.videoContainer}>
-          <video className={styles.mainVideo} controls autoPlay>
+        {/* Video */}
+        <div className={styles.videoWrap}>
+          <video className={styles.video} controls autoPlay>
             <source src={videoSrc} type="video/mp4" />
-            Your browser does not support the video tag.
           </video>
         </div>
 
-        {/* Footer Info */}
-        <div className={styles.modalFooter}>
+        {/* Footer */}
+        <div className={styles.footer}>
           <div className={styles.infoItem}>
+            <HardDrive size={12} className={styles.infoIcon} />
             <span className={styles.infoLabel}>Size</span>
             <span className={styles.infoValue}>{videoData.file_size} MB</span>
           </div>
+          <div className={styles.sep} />
           <div className={styles.infoItem}>
+            <Calendar size={12} className={styles.infoIcon} />
             <span className={styles.infoLabel}>Date</span>
             <span className={styles.infoValue}>
               {new Date(videoData.created_at).toLocaleDateString("en-GB")}
             </span>
           </div>
+          <div className={styles.sep} />
           <div className={styles.infoItem}>
+            <Clock size={12} className={styles.infoIcon} />
             <span className={styles.infoLabel}>Duration</span>
             <span className={styles.infoValue}>
-              {videoData.duration || "--:--"}
+              {videoData.duration || "—"}
             </span>
           </div>
         </div>

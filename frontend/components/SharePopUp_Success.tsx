@@ -7,12 +7,14 @@ interface SharePopUpSuccessProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  message?: string;
 }
 
 export default function SharePopUpSuccess({
   isOpen,
   onClose,
-  title = "Success!",
+  title = "Done!",
+  message,
 }: SharePopUpSuccessProps) {
   if (!isOpen) return null;
 
@@ -20,14 +22,15 @@ export default function SharePopUpSuccess({
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalIcon}>
-          <CheckCircle2 size={60} color="#22c55e" strokeWidth={2.5} />
+          <CheckCircle2 size={26} />
         </div>
+
         <h3 className={styles.title}>{title}</h3>
-        <div className={styles.modalActions}>
-          <button className={styles.okBtn} onClick={onClose}>
-            Done
-          </button>
-        </div>
+        {message && <p className={styles.message}>{message}</p>}
+
+        <button className={styles.okBtn} onClick={onClose}>
+          Done
+        </button>
       </div>
     </div>
   );

@@ -40,16 +40,13 @@ export async function PATCH(
 
     const body = await req.json();
 
-    const { res, data } = await serverFetch(
-        `/notification/${id}/update/`,
-        {
-            method: "PATCH",
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
+    const { res, data } = await serverFetch(`/notification/${id}/update/`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${token}`,
         },
-    );
+        body: JSON.stringify(body),
+    });
 
     return NextResponse.json(data, { status: res.status });
 }

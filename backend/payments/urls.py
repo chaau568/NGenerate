@@ -26,8 +26,5 @@ urlpatterns = [
     path("my-credit-logs/", views.my_credit_logs, name="my_credit_logs"),
 
     # ── Omise Webhook ─────────────────────────────────────
-    # ⚠️ URL นี้ต้องเป็น public (ไม่ต้อง auth)
-    # ⚠️ ต้อง register URL นี้ใน Omise Dashboard ด้วย
-    # ⚠️ ถ้าใช้ ngrok สำหรับ dev: https://xxxx.ngrok.io/payments/webhook/omise/
     path("webhook/omise/", views.omise_webhook, name="omise_webhook"),
 ]

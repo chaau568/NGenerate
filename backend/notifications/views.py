@@ -9,35 +9,6 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
 
-@extend_schema(
-    summary="ดึงรายการแจ้งเตือนทั้งหมด",
-    description="แสดงรายการแจ้งเตือนสถานะการทำงาน (Processing, Success, Error) ของผู้ใช้",
-    responses={
-        200: inline_serializer(
-            name="NotificationListResponse",
-            fields={
-                "notifications": serializers.ListField(
-                    child=inline_serializer(
-                        name="NotificationListItem",
-                        fields={
-                            "id": serializers.IntegerField(),
-                            "task_type": serializers.CharField(),
-                            "status": serializers.CharField(),
-                            "message": serializers.CharField(),
-                            "is_read": serializers.BooleanField(),
-                            "created_at": serializers.DateTimeField(),
-                            "type": serializers.ChoiceField(
-                                choices=["session", "novel"]
-                            ),
-                            "ref_id": serializers.IntegerField(),
-                        },
-                    )
-                )
-            },
-        )
-    },
-    tags=["Notifications"],
-)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
@@ -64,35 +35,6 @@ def notification_list(request):
     return Response({"notifications": data})
 
 
-@extend_schema(
-    summary="ดูรายละเอียดการแจ้งเตือน",
-    description="ดึงรายละเอียดเชิงลึกของการแจ้งเตือน และทำเครื่องหมายว่าอ่านแล้ว (is_read=True) โดยอัตโนมัติ",
-    responses={
-        200: inline_serializer(
-            name="NotificationDetailResponse",
-            fields={
-                "data": inline_serializer(
-                    name="NotificationDetailData",
-                    fields={
-                        "id": serializers.IntegerField(),
-                        "task_type": serializers.CharField(),
-                        "status": serializers.CharField(),
-                        "message": serializers.CharField(),
-                        "is_read": serializers.BooleanField(),
-                        "created_at": serializers.DateTimeField(),
-                        "session_info": serializers.DictField(
-                            required=False, allow_null=True
-                        ),
-                        "novel_info": serializers.DictField(
-                            required=False, allow_null=True
-                        ),
-                    },
-                )
-            },
-        )
-    },
-    tags=["Notifications"],
-)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def notification_detail(request, notification_id):
@@ -107,6 +49,11 @@ def notification_detail(request, notification_id):
     data = {
         "id": notification.id,
         "task_type": notification.task_type,
+        "task_name": (
+            f"{notification.task_type.capitalize()} Task"
+            if notification.task_type
+            else "Task"
+        ),
         "status": notification.get_effective_status(),
         "message": notification.message,
         "is_read": notification.is_read,
@@ -114,28 +61,47 @@ def notification_detail(request, notification_id):
         "processing": None,
         "session_info": None,
         "novel_info": None,
+        # เพิ่ม: ให้ frontend รู้ว่าจะ retry ไปที่ไหน
+        "session_id": notification.session_id,
+        "novel_id": notification.novel_id,
+        "session_name": notification.session.name if notification.session else None,
     }
 
     if notification.session:
         session = notification.session
-        steps = session.processing_steps.all().order_by("phase", "order")
+        phase = notification.task_type
 
-        def map_status(step_status):
-            return {
-                "pending": "pending",
-                "processing": "analyzing",
-                "success": "analyzed",
-                "failed": "fail",
-            }.get(step_status, "pending")
+        if phase in ("analysis", "generation"):
+            steps = session.processing_steps.filter(phase=phase).order_by("order")
+        else:
+            steps = session.processing_steps.none()
+
+        def map_status(step_status, task_phase):
+            if step_status == "success":
+                return "analyzed" if task_phase == "analysis" else "generated"
+            if step_status == "processing":
+                return "analyzing" if task_phase == "analysis" else "generating"
+            if step_status == "failed":
+                return "fail"
+            return "pending"
+
+        total = steps.count()
+        success_count = steps.filter(status="success").count()
+        phase_progress = round((success_count / total) * 100) if total > 0 else 0
+
+        if phase == "analysis" and session.is_analysis_done:
+            phase_progress = 100
+        elif phase == "generation" and session.is_generation_done:
+            phase_progress = 100
 
         data["processing"] = {
-            "overall_progress": session.get_progress_percentage(),
+            "overall_progress": phase_progress,
             "started_at": session.created_at,
             "steps": [
                 {
                     "id": step.id,
                     "name": step.name,
-                    "status": map_status(step.status),
+                    "status": map_status(step.status, phase),
                     "started_at": step.start_at,
                     "finished_at": step.finish_at,
                     "error_message": step.error_message or None,
@@ -153,12 +119,6 @@ def notification_detail(request, notification_id):
     return Response({"data": data}, status=status.HTTP_200_OK)
 
 
-@extend_schema(
-    summary="ลบการแจ้งเตือน",
-    description="ลบ notification ออกจากระบบ",
-    responses={204: None},
-    tags=["Notifications"],
-)
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def notification_delete(request, notification_id):
@@ -169,26 +129,9 @@ def notification_delete(request, notification_id):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-@extend_schema(
-    summary="อัปเดตการแจ้งเตือน",
-    description="อัปเดตสถานะหรือข้อความของ notification",
-    request=inline_serializer(
-        name="NotificationUpdateRequest",
-        fields={
-            "is_read": serializers.BooleanField(required=False),
-            "status": serializers.ChoiceField(
-                choices=["processing", "success", "error"], required=False
-            ),
-            "message": serializers.CharField(required=False),
-        },
-    ),
-    responses={200: None},
-    tags=["Notifications"],
-)
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def notification_update(request, notification_id):
-
     notification = get_object_or_404(
         Notification, id=notification_id, user=request.user
     )
@@ -201,13 +144,11 @@ def notification_update(request, notification_id):
         updated_fields.append("is_read")
 
     if "status" in data:
-
         if data["status"] not in dict(Notification.STATUS_CHOICES):
             return Response(
                 {"error": "Invalid status"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         notification.status = data["status"]
         updated_fields.append("status")
 
@@ -225,5 +166,4 @@ def notification_update(request, notification_id):
 @permission_classes([IsAuthenticated])
 def get_notification_is_read(request):
     count = Notification.objects.filter(user=request.user, is_read=False).count()
-
     return Response({"count": count})

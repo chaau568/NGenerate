@@ -18,11 +18,21 @@ class Notification(models.Model):
     )
 
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
     )
 
     session = models.ForeignKey(
         "ngenerate_sessions.Session",
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
+    )
+
+    generation_run = models.ForeignKey(
+        "ngenerate_sessions.GenerationRun",
         on_delete=models.CASCADE,
         related_name="notifications",
         null=True,
@@ -46,8 +56,8 @@ class Notification(models.Model):
     )
 
     message = models.TextField(blank=True)
-
     is_read = models.BooleanField(default=False)
+    file_path = models.CharField(max_length=500, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -55,15 +65,25 @@ class Notification(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["session", "task_type"], name="unique_session_task_notification"
-            )
+                fields=["session", "task_type"],
+                condition=models.Q(task_type="analysis"),
+                name="unique_session_analysis_notification",
+            ),
+            models.UniqueConstraint(
+                fields=["generation_run"],
+                condition=models.Q(task_type="generation"),
+                name="unique_generation_run_notification",
+            ),
         ]
         indexes = [
             models.Index(fields=["session", "task_type"]),
+            models.Index(fields=["generation_run"]),
             models.Index(fields=["user", "created_at"]),
         ]
 
     def __str__(self):
+        if self.generation_run:
+            return f"{self.user} | generation v{self.generation_run.version}"
         return f"{self.user} | {self.task_type}"
 
     def clean(self):
@@ -75,26 +95,32 @@ class Notification(models.Model):
                 "Notification cannot relate to both session and novel"
             )
 
+        if self.task_type == "generation" and self.session and not self.generation_run:
+            raise ValidationError("Generation notification must have a generation_run")
+
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
     def get_effective_status(self):
-        if not self.session:
-            return self.status
+        if self.task_type == "analysis" and self.session:
+            steps = self.session.processing_steps.filter(phase="analysis")
+            if not steps.exists():
+                return self.status
+            if steps.filter(status="failed").exists():
+                return "error"
+            if steps.filter(status__in=["processing", "pending"]).exists():
+                return "processing"
+            return "success"
 
-        steps = self.session.processing_steps.all()
+        if self.task_type == "generation" and self.generation_run:
+            steps = self.generation_run.processing_steps.all()
+            if not steps.exists():
+                return self.status
+            if steps.filter(status="failed").exists():
+                return "error"
+            if steps.filter(status__in=["processing", "pending"]).exists():
+                return "processing"
+            return "success"
 
-        if not steps.exists():
-            return "processing"
-
-        if steps.filter(status="failed").exists():
-            return "error"
-
-        if steps.filter(status="processing").exists():
-            return "processing"
-
-        if steps.filter(status="pending").exists():
-            return "processing"
-
-        return "success"
+        return self.status

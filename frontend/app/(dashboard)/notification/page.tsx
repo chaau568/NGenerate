@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, use, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchNotifications } from "@/app/services/notification";
 import SharePopUpDelete from "@/components/SharePopUp_Delete";
+import SharePopUpRetry from "@/components/SharePopUp_Retry";
 import { clientFetch } from "@/lib/client-fetch";
 import {
   Bell,
@@ -13,6 +14,7 @@ import {
   Trash2,
   RotateCcw,
   AlertCircle,
+  Sparkles,
 } from "lucide-react";
 import styles from "./page.module.css";
 
@@ -23,9 +25,15 @@ export default function NotificationPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // =========================
-  // FETCH (ใช้ service)
-  // =========================
+  const [showRetryModal, setShowRetryModal] = useState(false);
+  const [retryTarget, setRetryTarget] = useState<{
+    notificationId: number;
+    sessionId?: number | null;
+    novelId?: number | null;
+    taskType: string;
+    displayName: string;
+  } | null>(null);
+
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchNotifications,
@@ -34,9 +42,6 @@ export default function NotificationPage() {
     refetchIntervalInBackground: false,
   });
 
-  // =========================
-  // MARK READ
-  // =========================
   const markReadMutation = useMutation({
     mutationFn: async (id: number) => {
       await clientFetch(`/api/notification/${id}`, {
@@ -53,21 +58,37 @@ export default function NotificationPage() {
     },
   });
 
-  // =========================
-  // DELETE
-  // =========================
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await clientFetch(`/api/notification/${id}`, {
-        method: "DELETE",
-      });
+      await clientFetch(`/api/notification/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
     },
   });
 
-  const isDeleting = deleteMutation.isPending;
+  const retryMutation = useMutation({
+    mutationFn: async () => {
+      if (!retryTarget) return;
+      const { taskType, notificationId, sessionId, novelId } = retryTarget;
+      if (taskType === "upload") {
+        await clientFetch(`/api/notification/${notificationId}/retry-upload`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ novel_id: novelId }),
+        });
+      } else {
+        await clientFetch(`/api/sessions/retry/${sessionId}/`, {
+          method: "POST",
+        });
+      }
+    },
+    onSuccess: () => {
+      setShowRetryModal(false);
+      setRetryTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
 
   const handleReadAll = async () => {
     const unread = notifications.filter((n) => !n.is_read);
@@ -78,9 +99,42 @@ export default function NotificationPage() {
     router.push(`/notification/${id}`);
   };
 
-  const handleRetry = (e: React.MouseEvent, id: number) => {
+  const handleRetryClick = (
+    e: React.MouseEvent,
+    item: (typeof notifications)[number],
+  ) => {
     e.stopPropagation();
-    alert(`Retrying task for notification ID: ${id}`);
+    setRetryTarget({
+      notificationId: item.id,
+      taskType: item.task_type,
+      novelId: item.type === "novel" ? item.ref_id : null,
+      sessionId: item.type === "session" ? item.ref_id : null,
+      displayName: item.novel_title || item.task_type,
+    });
+    setShowRetryModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!selectedId) return;
+    deleteMutation.mutate(selectedId, {
+      onSuccess: () => {
+        setShowDeleteModal(false);
+        setSelectedId(null);
+      },
+    });
+  };
+
+  const getRetryWarning = (taskType: string) => {
+    if (taskType === "upload") {
+      return {
+        warningHighlight:
+          "การ Retry จะทำการอัปโหลดและประมวลผลไฟล์ใหม่ทั้งหมด บทที่สร้างจากไฟล์เดิมจะถูกลบ แล้วสร้างใหม่จากไฟล์ต้นฉบับ",
+      };
+    }
+    return {
+      warningHighlight:
+        "การ Retry ไม่ใช่การทำต่อจากการดำเนินงานล่าสุด แต่เป็นการลบการวิเคราะห์เดิมทิ้ง แล้ว สร้างใหม่",
+    };
   };
 
   const formatDate = (dateString: string) => {
@@ -94,75 +148,96 @@ export default function NotificationPage() {
     });
   };
 
-  const handleConfirmDelete = () => {
-    if (!selectedId) return;
-
-    deleteMutation.mutate(selectedId, {
-      onSuccess: () => {
-        setShowDeleteModal(false);
-        setSelectedId(null);
-      },
-    });
-  };
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   if (isLoading) {
-    return <div className={styles.statusText}>Loading Notifications...</div>;
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingBar}>
+          <div className={styles.loadingFill} />
+        </div>
+        <span>Loading Notifications…</span>
+      </div>
+    );
   }
 
   return (
     <div className={styles.container}>
+      {/* Header */}
       <header className={styles.header}>
-        <h1>Notifications</h1>
-
-        <div className={styles.rightGroup}>
-          <span className={styles.badge}>
-            {notifications.filter((n) => !n.is_read).length} Unread
-          </span>
-
+        <div className={styles.headerLeft}>
+          <div className={styles.headerIcon}>
+            <Bell size={18} />
+          </div>
+          <div>
+            <h1 className={styles.title}>Notifications</h1>
+            <p className={styles.subtitle}>
+              {unreadCount > 0
+                ? `${unreadCount} unread update${unreadCount > 1 ? "s" : ""}`
+                : "All caught up"}
+            </p>
+          </div>
+        </div>
+        <div className={styles.headerActions}>
+          {unreadCount > 0 && (
+            <div className={styles.unreadPill}>{unreadCount}</div>
+          )}
           <button className={styles.readAllBtn} onClick={handleReadAll}>
-            <CheckCircle2 size={18} /> Read All
+            <CheckCircle2 size={14} />
+            Mark all read
           </button>
         </div>
       </header>
 
+      {/* List */}
       <div className={styles.list}>
         {notifications.length === 0 ? (
           <div className={styles.emptyState}>
-            <Bell size={48} />
-            <p>No notifications yet</p>
+            <div className={styles.emptyIconWrap}>
+              <Bell size={28} />
+            </div>
+            <p className={styles.emptyTitle}>No notifications yet</p>
+            <p className={styles.emptyDesc}>AI task updates will appear here</p>
           </div>
         ) : (
           notifications.map((item) => (
             <div
               key={item.id}
-              className={`${styles.card} ${!item.is_read ? styles.unread : ""}`}
+              className={`${styles.card} ${!item.is_read ? styles.unread : ""} ${styles[`status_${item.status}`]}`}
               onClick={() => handleViewDetail(item.id)}
             >
-              <div className={styles.iconWrapper}>
-                {item.status === "processing" && (
-                  <Clock className={styles.statusIconProcessing} size={24} />
-                )}
-                {item.status === "success" && (
-                  <CheckCircle2
-                    className={styles.statusIconSuccess}
-                    size={24}
-                  />
-                )}
-                {item.status === "error" && (
-                  <AlertCircle className={styles.statusIconError} size={24} />
-                )}
+              {/* Status indicator strip */}
+              <div
+                className={`${styles.statusStrip} ${styles[`strip_${item.status}`]}`}
+              />
+
+              {/* Icon */}
+              <div
+                className={`${styles.iconWrap} ${styles[`icon_${item.status}`]}`}
+              >
+                {item.status === "processing" && <Clock size={18} />}
+                {item.status === "success" && <CheckCircle2 size={18} />}
+                {item.status === "error" && <AlertCircle size={18} />}
               </div>
 
+              {/* Content */}
               <div className={styles.content}>
-                <div className={styles.contentHeader}>
-                  <div className={styles.taskInfo}>
-                    <h3 className={styles.taskName}>{item.task_type}</h3>
-                    <span className={styles.time}>
+                <div className={styles.topRow}>
+                  <div className={styles.taskMeta}>
+                    <span
+                      className={`${styles.taskTypeBadge} ${styles[`badge_${item.status}`]}`}
+                    >
+                      {item.status === "processing" && "Running"}
+                      {item.status === "success" && "Complete"}
+                      {item.status === "error" && "Failed"}
+                    </span>
+                    <span className={styles.typePill}>#{item.type}</span>
+                    {!item.is_read && <span className={styles.newDot} />}
+                  </div>
+                  <div className={styles.topRight}>
+                    <span className={styles.timestamp}>
                       {formatDate(item.created_at)}
                     </span>
-                  </div>
-
-                  <div className={styles.topActions}>
                     <button
                       className={styles.deleteBtn}
                       onClick={(e) => {
@@ -171,56 +246,63 @@ export default function NotificationPage() {
                         setShowDeleteModal(true);
                       }}
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={32} />
                     </button>
                   </div>
                 </div>
 
+                <h3 className={styles.taskName}>{item.task_type}</h3>
                 <p className={styles.message}>{item.message}</p>
 
-                <div className={styles.footer}>
-                  <div className={styles.tags}>
-                    <span className={styles.typeTag}>#{item.type}</span>
-                    {!item.is_read && (
-                      <span className={styles.newBadge}>New</span>
-                    )}
+                {item.status === "error" && (
+                  <div className={styles.cardFooter}>
+                    <button
+                      className={styles.retryBtn}
+                      onClick={(e) => handleRetryClick(e, item)}
+                    >
+                      <RotateCcw size={12} />
+                      Retry Task
+                    </button>
                   </div>
-
-                  <div className={styles.actions}>
-                    {item.status === "error" && (
-                      <button
-                        className={styles.retryBtn}
-                        onClick={(e) => handleRetry(e, item.id)}
-                      >
-                        <RotateCcw size={14} /> Retry
-                      </button>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           ))
         )}
-
-        {showDeleteModal && (
-          <SharePopUpDelete
-            isOpen={showDeleteModal}
-            onClose={() => {
-              setShowDeleteModal(false);
-              setSelectedId(null);
-            }}
-            onConfirm={handleConfirmDelete}
-            isLoading={isDeleting}
-            title="Delete Notification?"
-            description={
-              <p>
-                Are you sure you want to delete this notification? This action
-                cannot be undone.
-              </p>
-            }
-          />
-        )}
       </div>
+
+      {showDeleteModal && (
+        <SharePopUpDelete
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedId(null);
+          }}
+          onConfirm={handleConfirmDelete}
+          isLoading={deleteMutation.isPending}
+          title="Delete Notification?"
+          description={
+            <p>
+              Are you sure you want to delete this notification? This action
+              cannot be undone.
+            </p>
+          }
+        />
+      )}
+
+      {showRetryModal && retryTarget && (
+        <SharePopUpRetry
+          isOpen={showRetryModal}
+          onClose={() => {
+            setShowRetryModal(false);
+            setRetryTarget(null);
+          }}
+          onConfirm={() => retryMutation.mutate()}
+          isLoading={retryMutation.isPending}
+          sessionName={retryTarget.displayName}
+          {...getRetryWarning(retryTarget.taskType)}
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ export type Notification = {
     created_at: string;
     type: "novel" | "session";
     ref_id: number;
+    session_id?: number | null;
+    novel_title?: string | null;
 };
 
 export const fetchNotifications = async (): Promise<Notification[]> => {

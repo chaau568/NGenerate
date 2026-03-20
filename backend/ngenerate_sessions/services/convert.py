@@ -1,15 +1,12 @@
-from pythainlp.tokenize import sent_tokenize
+from pythainlp.tokenize import sent_tokenize, syllable_tokenize
 
 
 class ConvertTextToJson:
 
-    MAX_WORDS = 250
+    MAX_WORDS = 100
 
-    def split_sentences(self, text: str):
-
-        # ใช้ PyThaiNLP ตัดประโยค
+    def split_sentences(self, text: str) -> list[str]:
         raw_sentences = sent_tokenize(text)
-
         clean_sentences = []
 
         for s in raw_sentences:
@@ -19,7 +16,6 @@ class ConvertTextToJson:
 
             words = s.split()
 
-            # ถ้ายาวเกิน 250 คำ → ตัดเพิ่ม
             if len(words) <= self.MAX_WORDS:
                 clean_sentences.append(s)
             else:
@@ -29,12 +25,29 @@ class ConvertTextToJson:
 
         return clean_sentences
 
-    def text_file_to_json(self, text: str):
+    def to_syllable_text(self, text: str) -> str:
+        syllables = syllable_tokenize(text)
+        cleaned = [s for s in syllables if s.strip()]
+        return "-".join(cleaned)
 
+    def text_to_json(self, text: str, start_index: int = 1) -> dict:
         sentences = self.split_sentences(text)
 
+        result = []
+        for i, s in enumerate(sentences):
+            result.append(
+                {
+                    "sentence_index": start_index + i,
+                    "text": s,  
+                    "tts_text": self.to_syllable_text(s),  
+                }
+            )
+
         return {
-            "sentences": [
-                {"sentence_index": i + 1, "text": s} for i, s in enumerate(sentences)
-            ]
+            "sentences": result,
+            "next_index": start_index + len(sentences),
         }
+
+    def text_file_to_json(self, text: str) -> dict:
+        result = self.text_to_json(text, start_index=1)
+        return {"sentences": result["sentences"]}

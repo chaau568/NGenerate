@@ -25,3 +25,31 @@ export async function GET() {
 
     return NextResponse.json(data);
 }
+
+export async function POST(
+    req: Request,
+    context: { params: Promise<{ id: string }> }
+) {
+    const { id } = await context.params;
+    const cookieStore = await cookies();
+    const accessToken = cookieStore.get("access")?.value;
+
+    if (!accessToken) {
+        return NextResponse.json(
+            { detail: "Authentication credentials were not provided." },
+            { status: 401 }
+        );
+    }
+
+    const { res, data } = await serverFetch(
+        `/notification/${id}/retry-upload/`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        }
+    );
+
+    return NextResponse.json(data, { status: res.status });
+}

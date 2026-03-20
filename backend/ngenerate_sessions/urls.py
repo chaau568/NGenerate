@@ -23,8 +23,12 @@ urlpatterns = [
     path("current-tasks/", views.current_tasks, name="current-tasks"),
     path("finished-tasks/", views.finished_tasks, name="finished-tasks"),
     path("detail/<int:session_id>/", views.view_detail, name="history-detail"),
+    path("data/<int:session_id>/", views.session_data, name="session-data"), 
     path("delete/<int:session_id>/", views.delete_session, name="delete-session"),
-    
-    # Transaction History
-    path("transaction/", views.transaction_history, name="history-transaction"),
+    path("project/", views.project_list, name="project-list"),
+    path("project/<int:session_id>/", views.project_delete, name="project-delete"),
+
+    # Sentence edit
+    path("data/<int:session_id>/sentence/<int:sentence_id>/", views.update_sentence, name="update-sentence"),
+    path("emotion-choices/", views.emotion_choices, name="emotion-choices"),
 ]

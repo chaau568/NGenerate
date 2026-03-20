@@ -41,28 +41,30 @@ class AIService:
     # CHARACTER IMAGE
     # ===============================
 
-    def generate_character_master(self, character_profile, output_path):
+    def generate_character_master(self, character_profile, output_path, style="ghibli"):
 
         return self.image.generate_character_text2image(
             positive_prompt=character_profile.positive_prompt,
             negative_prompt=character_profile.negative_prompt,
             output_path=output_path,
+            style=style
         )
 
-    def generate_character_emotion(self, character, reference_image_path, output_path):
+    def generate_character_emotion(self, character, reference_image_path, output_path, style="ghibli"):
 
         return self.image.generate_character_with_ref(
             positive_prompt=character.positive_prompt,
             negative_prompt=character.negative_prompt,
             reference_image_path=reference_image_path,
             output_path=output_path,
+            style=style,
         )
 
     # ===============================
     # SCENE
     # ===============================
 
-    def generate_scene_image(self, illustration, output_path):
+    def generate_scene_image(self, illustration, output_path, style="ghibli"):
 
         return self.image.generate_scene(
             positive_prompt=illustration.positive_prompt,
@@ -70,6 +72,7 @@ class AIService:
             width=1280,
             height=720,
             output_path=output_path,
+            style=style
         )
 
     # ===============================

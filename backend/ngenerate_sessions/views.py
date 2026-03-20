@@ -1,7 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 
-# DRF Imports
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,14 +9,14 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
-from .models import Session
+from .models import Session, GenerationRun, Sentence
 from novels.models import Novel, Chapter
 from users.models import UserCredit
-from payments.models import CreditLog
 from utils.file_url import build_file_url
 from utils.runpod_storage import delete_runpod_folder
 
 from .tasks import run_analysis_task, run_generation_task
+from .services.convert import ConvertTextToJson
 
 
 # =====================================================
@@ -71,10 +70,7 @@ def create_session(request, novel_id):
         )
 
     if style not in dict(Session.STYLE_CHOICES):
-        return Response(
-            {"error": "Invalid style"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response({"error": "Invalid style"}, status=status.HTTP_400_BAD_REQUEST)
 
     chapters = Chapter.objects.filter(id__in=chapter_ids, novel=novel)
 
@@ -84,25 +80,21 @@ def create_session(request, novel_id):
         )
 
     with transaction.atomic():
-
         session = Session.objects.create(
             novel=novel,
             session_type=session_type,
             name=name or "",
             style=style,
         )
-
         session.chapters.set(chapters)
 
         if not name:
             ordered = chapters.order_by("order")
             first = ordered.first()
             last = ordered.last()
-
             session.name = (
                 f"Session: {novel.title} chapter#{first.order} - chapter#{last.order}"
             )[:255]
-
             session.save(update_fields=["name"])
 
     return Response(
@@ -121,20 +113,6 @@ def create_session(request, novel_id):
 # =====================================================
 
 
-@extend_schema(
-    summary="ดูสรุปค่าใช้จ่ายก่อนเริ่มการวิเคราะห์ (Analysis)",
-    responses={
-        200: inline_serializer(
-            name="SummaryAnalyzeResponse",
-            fields={
-                "details": serializers.DictField(),
-                "summary": serializers.DictField(),
-                "status": serializers.CharField(),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def summary_analyze(request, session_id):
@@ -169,33 +147,11 @@ def summary_analyze(request, session_id):
     )
 
 
-@extend_schema(
-    summary="แก้ไข Session (เฉพาะสถานะ Draft)",
-    request=inline_serializer(
-        name="EditSessionRequest",
-        fields={
-            "chapter_ids": serializers.ListField(
-                child=serializers.IntegerField(), required=False
-            ),
-            "name": serializers.CharField(required=False),
-        },
-    ),
-    responses={
-        200: inline_serializer(
-            name="EditSessionResponse",
-            fields={
-                "session_id": serializers.IntegerField(),
-                "session_name": serializers.CharField(),
-                "status": serializers.CharField(),
-                "chapter_count": serializers.IntegerField(),
-            },
-        ),
-        400: inline_serializer(
-            name="EditSessionError", fields={"error": serializers.CharField()}
-        ),
-    },
-    tags=["Sessions"],
-)
+# =====================================================
+# EDIT SESSION
+# =====================================================
+
+
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def edit_session(request, session_id):
@@ -222,15 +178,12 @@ def edit_session(request, session_id):
                     {"error": "At least one chapter is required"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
             chapters = Chapter.objects.filter(id__in=chapter_ids, novel=session.novel)
-
             if chapters.count() != len(chapter_ids):
                 return Response(
                     {"error": "Some chapters are invalid"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-
             session.chapters.set(chapters)
 
         if style is not None:
@@ -252,19 +205,11 @@ def edit_session(request, session_id):
     )
 
 
-@extend_schema(
-    summary="เริ่มกระบวนการวิเคราะห์ (ตัด Credit และเริ่ม Task)",
-    responses={
-        201: inline_serializer(
-            name="StartAnalysisResponse",
-            fields={
-                "status": serializers.CharField(),
-                "locked_credits": serializers.IntegerField(),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
+# =====================================================
+# START ANALYSIS
+# =====================================================
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def start_analysis(request, session_id):
@@ -299,30 +244,6 @@ def start_analysis(request, session_id):
 # =====================================================
 
 
-@extend_schema(
-    summary="ดูสรุปค่าใช้จ่ายก่อนเริ่มการสร้าง (Generation)",
-    description="คำนวณ Credit จากจำนวนประโยค, โปรไฟล์ตัวละคร และจำนวนภาพประกอบที่ต้องสร้าง",
-    responses={
-        200: inline_serializer(
-            name="SummaryGenerateResponse",
-            fields={
-                "details": serializers.DictField(),
-                "summary": inline_serializer(
-                    name="GenerationSummary",
-                    fields={
-                        "sentence_count": serializers.IntegerField(),
-                        "character_count": serializers.IntegerField(),
-                        "scene_count": serializers.IntegerField(),
-                        "total_credit_required": serializers.IntegerField(),
-                        "credits_remaining": serializers.IntegerField(),
-                    },
-                ),
-                "status": serializers.CharField(),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def summary_generate(request, session_id):
@@ -330,8 +251,7 @@ def summary_generate(request, session_id):
 
     if not session.is_analysis_done:
         return Response(
-            {"error": "Analysis not completed"},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"error": "Analysis not completed"}, status=status.HTTP_400_BAD_REQUEST
         )
 
     if session.status != "analyzed":
@@ -340,62 +260,82 @@ def summary_generate(request, session_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # ป้องกัน generate ซ้อนกัน
+    if session.generation_runs.filter(status="generating").exists():
+        return Response(
+            {"error": "Generation is already in progress"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     required_credit = session.calculate_generation_credit()
     wallet, _ = UserCredit.objects.get_or_create(user=request.user)
 
-    character_count = session.characters.count()
-
     return Response(
         {
-            "details": {
-                "session_name": session.name,
-            },
+            "details": {"session_name": session.name},
             "summary": {
                 "sentence_count": session.sentences.count(),
-                "character_count": character_count,
+                "character_count": session.characters.count(),
                 "scene_count": session.illustrations.count(),
                 "total_credit_required": required_credit,
                 "credits_remaining": wallet.available,
             },
+            "generation_history": [
+                {
+                    "version": r.version,
+                    "status": r.status,
+                    "style": r.style,
+                    "created_at": r.created_at,
+                    "generation_finished_at": r.generation_finished_at,
+                }
+                for r in session.generation_runs.order_by("-version")
+            ],
             "status": session.status,
         }
     )
 
 
-@extend_schema(
-    summary="เริ่มกระบวนการสร้าง (ตัด Credit และเริ่มสร้างภาพ/วิดีโอ)",
-    responses={
-        201: inline_serializer(
-            name="StartGenerationResponse",
-            fields={
-                "status": serializers.CharField(),
-                "locked_credits": serializers.IntegerField(),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
+# =====================================================
+# START GENERATION  ← จุดสำคัญ: สร้าง GenerationRun ใหม่ทุกครั้ง
+# =====================================================
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def start_generation(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
+    if not session.is_analysis_done:
+        return Response({"error": "Analysis not completed"}, status=400)
+
     if session.status != "analyzed":
         return Response({"error": "Session must be analyzed first"}, status=400)
 
+    if session.generation_runs.filter(status="generating").exists():
+        return Response({"error": "Generation is already in progress"}, status=400)
+
     try:
         with transaction.atomic():
-            session.start_generation()
+            # สร้าง GenerationRun ใหม่ทุกครั้งที่กด Generate
+            run = GenerationRun.create_next(session)
+            run.start()
+
+            run_id = run.id
             transaction.on_commit(
                 lambda: run_generation_task.apply_async(
-                    args=[session.id],
+                    args=[run_id],
                     queue="generation_queue",
                     priority=7,
                 )
             )
 
         return Response(
-            {"status": session.status, "locked_credits": session.locked_credits},
+            {
+                "generation_run_id": run.id,
+                "version": run.version,
+                "status": run.status,
+                "locked_credits": run.locked_credits,
+            },
             status=status.HTTP_201_CREATED,
         )
     except Exception as e:
@@ -403,7 +343,7 @@ def start_generation(request, session_id):
 
 
 # =====================================================
-# HISTORY
+# HISTORY / PROJECT LIST
 # =====================================================
 
 
@@ -415,48 +355,62 @@ def draft_tasks(request):
         .select_related("novel")
         .order_by("-created_at")
     )
-
-    draft_tasks = []
-
-    for s in sessions:
-        draft_tasks.append(
-            {
-                "session_id": s.id,
-            }
-        )
-
-    return Response({"draft_tasks": draft_tasks}, status=status.HTTP_200_OK)
+    return Response(
+        {"draft_tasks": [{"session_id": s.id} for s in sessions]},
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def current_tasks(request):
-    sessions = (
-        Session.objects.filter(
-            novel__user=request.user, status__in=["analyzing", "generating"]
+    # analyzing sessions
+    analyzing_sessions = (
+        Session.objects.filter(novel__user=request.user, status="analyzing")
+        .prefetch_related("processing_steps")
+        .order_by("-created_at")
+    )
+
+    # generating runs
+    generating_runs = (
+        GenerationRun.objects.filter(
+            session__novel__user=request.user,
+            status="generating",
         )
+        .select_related("session__novel")
         .prefetch_related("processing_steps")
         .order_by("-created_at")
     )
 
     current_tasks = []
 
-    for s in sessions:
+    for s in analyzing_sessions:
         current_tasks.append(
             {
                 "session_id": s.id,
                 "novel_id": s.novel.id,
                 "session_name": s.name,
                 "status": s.status,
-                "type": s.session_type,
+                "type": "analysis",
                 "progress": s.get_progress_percentage(),
             }
         )
 
-    return Response(
-        {"current_tasks": current_tasks},
-        status=status.HTTP_200_OK,
-    )
+    for run in generating_runs:
+        current_tasks.append(
+            {
+                "session_id": run.session.id,
+                "novel_id": run.session.novel.id,
+                "session_name": run.session.name,
+                "generation_run_id": run.id,
+                "version": run.version,
+                "status": run.status,
+                "type": "generation",
+                "progress": run.get_progress_percentage(),
+            }
+        )
+
+    return Response({"current_tasks": current_tasks}, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
@@ -464,10 +418,11 @@ def current_tasks(request):
 def finished_tasks(request):
     sessions = (
         Session.objects.filter(
-            novel__user=request.user, status__in=["analyzed", "generated", "failed"]
+            novel__user=request.user,
+            status__in=["analyzed", "failed"],
         )
         .select_related("novel")
-        .prefetch_related("videos")
+        .prefetch_related("generation_runs__videos")
         .order_by("-created_at")
     )
 
@@ -476,9 +431,6 @@ def finished_tasks(request):
     failed_history = []
 
     for s in sessions:
-        videos = list(s.videos.all())
-        latest_video = max(videos, key=lambda v: v.version) if videos else None
-
         base_data = {
             "session_id": s.id,
             "novel_id": s.novel.id,
@@ -490,23 +442,37 @@ def finished_tasks(request):
         }
 
         if s.status == "analyzed":
-            analysis_history.append(
-                {
-                    **base_data,
-                    "analysis_finished_at": s.analysis_finished_at,
-                }
-            )
+            # รวม generation runs ที่ generated แล้ว
+            generated_runs = [
+                r for r in s.generation_runs.all() if r.status == "generated"
+            ]
 
-        elif s.status == "generated":
-            generation_history.append(
-                {
-                    **base_data,
-                    "video_id": latest_video.id if latest_video else None,
-                    "version": latest_video.version if latest_video else None,
-                    "file_size": latest_video.file_size if latest_video else 0.0,
-                    "generation_finished_at": s.generation_finished_at,
-                }
-            )
+            if generated_runs:
+                for run in generated_runs:
+                    videos = list(run.videos.all())
+                    latest_video = (
+                        max(videos, key=lambda v: v.version) if videos else None
+                    )
+                    generation_history.append(
+                        {
+                            **base_data,
+                            "generation_run_id": run.id,
+                            "version": run.version,
+                            "video_id": latest_video.id if latest_video else None,
+                            "file_size": (
+                                latest_video.file_size if latest_video else 0.0
+                            ),
+                            "generation_finished_at": run.generation_finished_at,
+                        }
+                    )
+            else:
+                # ยัง analyze เสร็จ แต่ยังไม่เคย generate
+                analysis_history.append(
+                    {
+                        **base_data,
+                        "analysis_finished_at": s.analysis_finished_at,
+                    }
+                )
 
         elif s.status == "failed":
             failed_history.append(base_data)
@@ -521,19 +487,21 @@ def finished_tasks(request):
     )
 
 
-@extend_schema(summary="ลบ Session", responses={204: None}, tags=["Sessions"])
+# =====================================================
+# DELETE SESSION
+# =====================================================
+
+
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def delete_session(request, session_id):
-
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
     user_id = request.user.id
     novel_id = session.novel.id
-    session_id = session.id
+    sid = session.id
 
-    runpod_path = f"user_data/user_{user_id}/novel_{novel_id}/session_{session_id}"
-
+    runpod_path = f"user_data/user_{user_id}/novel_{novel_id}/session_{sid}"
     delete_runpod_folder(runpod_path)
     session.delete()
 
@@ -545,21 +513,6 @@ def delete_session(request, session_id):
 # =====================================================
 
 
-@extend_schema(
-    summary="ดูความคืบหน้าของ Pipeline (Processing Steps)",
-    responses={
-        200: inline_serializer(
-            name="ViewDetailResponse",
-            fields={
-                "session_name": serializers.CharField(),
-                "status": serializers.CharField(),
-                "overall_progress": serializers.IntegerField(),
-                "steps": serializers.ListField(child=serializers.DictField()),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def view_detail(request, session_id):
@@ -569,7 +522,38 @@ def view_detail(request, session_id):
         novel__user=request.user,
     )
 
-    steps = session.processing_steps.all().order_by("order")
+    # Analysis steps
+    analysis_steps = session.processing_steps.all().order_by("order")
+
+    # Generation runs + steps
+    generation_runs_data = []
+    for run in session.generation_runs.prefetch_related("processing_steps").order_by(
+        "-version"
+    ):
+        generation_runs_data.append(
+            {
+                "generation_run_id": run.id,
+                "version": run.version,
+                "status": run.status,
+                "style": run.style,
+                "progress": run.get_progress_percentage(),
+                "created_at": run.created_at,
+                "generation_finished_at": run.generation_finished_at,
+                "steps": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "status": s.status,
+                        "started_at": s.start_at,
+                        "finished_at": s.finish_at,
+                        "error_message": (
+                            s.error_message if s.status == "failed" else None
+                        ),
+                    }
+                    for s in run.processing_steps.all().order_by("order")
+                ],
+            }
+        )
 
     return Response(
         {
@@ -577,7 +561,7 @@ def view_detail(request, session_id):
             "status": session.status,
             "overall_progress": session.get_progress_percentage(),
             "started_at": session.created_at,
-            "steps": [
+            "analysis_steps": [
                 {
                     "id": s.id,
                     "name": s.name,
@@ -586,46 +570,11 @@ def view_detail(request, session_id):
                     "finished_at": s.finish_at,
                     "error_message": s.error_message if s.status == "failed" else None,
                 }
-                for s in steps
+                for s in analysis_steps
             ],
+            "generation_runs": generation_runs_data,
         }
     )
-
-
-# =====================================================
-# TRANSACTION
-# =====================================================
-
-
-@extend_schema(
-    summary="ประวัติการใช้ Credit",
-    responses={
-        200: inline_serializer(
-            name="TransactionHistoryResponse",
-            fields={
-                "transactions": serializers.ListField(child=serializers.DictField())
-            },
-        )
-    },
-    tags=["History"],
-)
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def transaction_history(request):
-
-    credit_logs = CreditLog.objects.filter(user=request.user).order_by("-created_at")
-
-    data = [
-        {
-            "date": log.created_at,
-            "type": log.type,
-            "session_id": log.session.id if log.session else None,
-            "amount": log.amount,
-        }
-        for log in credit_logs
-    ]
-
-    return Response({"transactions": data})
 
 
 # =====================================================
@@ -633,32 +582,22 @@ def transaction_history(request):
 # =====================================================
 
 
-@extend_schema(
-    summary="เริ่มการทำงานใหม่กรณีที่ Failed",
-    description="ล้างข้อมูลเดิมใน Session และเริ่มกระบวนการใหม่ตามจุดที่ค้างอยู่",
-    responses={
-        200: inline_serializer(
-            name="RetryResponse",
-            fields={
-                "message": serializers.CharField(),
-                "status": serializers.CharField(),
-            },
-        )
-    },
-    tags=["Sessions"],
-)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def retry_session(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    if session.status != "failed":
-        return Response({"error": "Only failed sessions can retry"}, status=400)
+    if session.status not in ["failed", "analyzed"]:
+        return Response(
+            {"error": "Only failed sessions or analyzed sessions can retry generation"},
+            status=400,
+        )
 
     with transaction.atomic():
-        session.processing_steps.all().delete()
 
         if not session.is_analysis_done:
+            # Analysis failed → ล้างทุกอย่างแล้ว re-analyze
+            session.processing_steps.all().delete()
             session.sentences.all().delete()
             session.characters.all().delete()
             session.illustrations.all().delete()
@@ -674,18 +613,296 @@ def retry_session(request, session_id):
             )
 
         else:
-            session.videos.all().delete()
+            # Generation failed → สร้าง GenerationRun ใหม่
+            failed_run = (
+                session.generation_runs.filter(status="failed")
+                .order_by("-version")
+                .first()
+            )
+            if failed_run:
+                # ล้าง assets ของ run ที่ fail
+                failed_run.processing_steps.all().delete()
 
-            session.character_assets.all().delete()
-            session.voices.all().delete()
-            session.scene_images.all().delete()
+            run = GenerationRun.create_next(session)
+            run.start()
 
-            session.status = "analyzed"
-            session.locked_credits = 0
-            session.save()
-
-            session.start_generation()
-            transaction.on_commit(lambda: run_generation_task.delay(session.id))
-            message = "Generation failed. Kept analysis results but cleared generation assets, restarting."
+            run_id = run.id
+            transaction.on_commit(lambda: run_generation_task.delay(run_id))
+            message = f"Generation failed. Starting new generation run v{run.version}."
 
     return Response({"message": message, "status": session.status})
+
+
+# =====================================================
+# PROJECT LIST (unified endpoint)
+# =====================================================
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def project_list(request):
+    query_type = request.query_params.get("type", "current")
+
+    if query_type == "current":
+        return current_tasks(request)
+    elif query_type == "finished":
+        return finished_tasks(request)
+    else:
+        return Response({"error": "Invalid type"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def project_delete(request, session_id):
+    session = get_object_or_404(Session, id=session_id, novel__user=request.user)
+
+    try:
+        folder_path = f"user_data/user_{session.novel.user_id}/novel_{session.novel_id}/session_{session.id}"
+        delete_runpod_folder(folder_path)
+    except Exception:
+        pass
+
+    session.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# =====================================================
+# SESSION DATA (ANALYSIS + GENERATION)
+# =====================================================
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def session_data(request, session_id):
+    from utils.file_url import build_file_url
+
+    session = get_object_or_404(
+        Session.objects.select_related("novel"),
+        id=session_id,
+        novel__user=request.user,
+    )
+
+    if not session.is_analysis_done:
+        return Response(
+            {"error": "Analysis not completed"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # ใช้ run_id query param เพื่อเลือก version ที่ต้องการ
+    # ถ้าไม่ระบุ ใช้ latest generated run
+    run_id = request.query_params.get("run_id")
+    if run_id:
+        generation_run = get_object_or_404(
+            GenerationRun, id=run_id, session=session, status="generated"
+        )
+    else:
+        generation_run = (
+            session.generation_runs.filter(status="generated")
+            .order_by("-version")
+            .first()
+        )
+
+    is_generated = generation_run is not None
+
+    # =====================
+    # CHARACTERS
+    # =====================
+    characters_qs = (
+        session.characters.select_related(
+            "character_profile",
+            "character_profile__asset",
+            "illustration",
+            "illustration__chapter",
+        )
+        .prefetch_related("asset")
+        .order_by("character_profile__name", "emotion")
+    )
+
+    profile_map = {}
+    for char in characters_qs:
+        profile = char.character_profile
+        pid = profile.id
+
+        if pid not in profile_map:
+            master_image = None
+            if is_generated and hasattr(profile, "asset") and profile.asset.image:
+                master_image = build_file_url(profile.asset.image)
+
+            profile_map[pid] = {
+                "profile_id": pid,
+                "name": profile.name,
+                "appearance": profile.appearance,
+                "sex": profile.sex,
+                "age": profile.age,
+                "master_image": master_image,
+                "emotions": [],
+            }
+
+        emotion_image = None
+        if is_generated and hasattr(char, "asset") and char.asset and char.asset.image:
+            # กรอง asset ตาม generation_run
+            if char.asset.generation_run_id == generation_run.id:
+                emotion_image = build_file_url(char.asset.image)
+
+        profile_map[pid]["emotions"].append(
+            {
+                "character_id": char.id,
+                "emotion": char.emotion,
+                "image": emotion_image,
+            }
+        )
+
+    # =====================
+    # SENTENCES
+    # =====================
+    sentences_qs = (
+        session.sentences.select_related("chapter")
+        .prefetch_related("voice_assets")
+        .order_by("chapter__order", "sentence_index")
+    )
+
+    sentences_data = []
+    for sent in sentences_qs:
+        voice_url = None
+        if is_generated:
+            voice = sent.voice_assets.filter(generation_run=generation_run).first()
+            if voice:
+                voice_url = build_file_url(voice.voice)
+
+        sentences_data.append(
+            {
+                "id": sent.id,
+                "chapter_order": sent.chapter.order,
+                "sentence_index": sent.sentence_index,
+                "sentence": sent.sentence,
+                "tts_text": sent.tts_text,
+                "emotion": sent.emotion,
+                "voice": voice_url,
+            }
+        )
+
+    # =====================
+    # SCENES
+    # =====================
+    scenes_qs = (
+        session.illustrations.select_related("chapter")
+        .prefetch_related("image_assets")
+        .order_by("chapter__order", "scene_index")
+    )
+
+    scenes_data = []
+    for scene in scenes_qs:
+        scene_image = None
+        if is_generated:
+            img = scene.image_assets.filter(generation_run=generation_run).first()
+            if img:
+                scene_image = build_file_url(img.image)
+
+        scenes_data.append(
+            {
+                "id": scene.id,
+                "chapter_order": scene.chapter.order,
+                "scene_index": scene.scene_index,
+                "sentence_start": scene.sentence_start,
+                "sentence_end": scene.sentence_end,
+                "description": scene.scene_description,
+                "image": scene_image,
+            }
+        )
+
+    return Response(
+        {
+            "session_id": session.id,
+            "session_name": session.name,
+            "session_type": session.session_type,
+            "style": session.style,
+            "status": session.status,
+            "is_analysis_done": session.is_analysis_done,
+            "is_generation_done": is_generated,
+            "current_generation_run": (
+                {
+                    "id": generation_run.id,
+                    "version": generation_run.version,
+                    "style": generation_run.style,
+                }
+                if generation_run
+                else None
+            ),
+            "generation_runs": [
+                {
+                    "id": r.id,
+                    "version": r.version,
+                    "status": r.status,
+                    "style": r.style,
+                    "generation_finished_at": r.generation_finished_at,
+                }
+                for r in session.generation_runs.order_by("-version")
+            ],
+            "characters": list(profile_map.values()),
+            "sentences": sentences_data,
+            "scenes": scenes_data,
+        }
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_sentence(request, session_id, sentence_id):
+
+    session = get_object_or_404(Session, id=session_id, novel__user=request.user)
+
+    if not session.is_analysis_done:
+        return Response(
+            {"error": "Analysis not completed"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    sentence = get_object_or_404(Sentence, id=sentence_id, session=session)
+
+    allowed_fields = {"sentence", "tts_text", "emotion"}
+    update_data = {k: v for k, v in request.data.items() if k in allowed_fields}
+
+    if not update_data:
+        return Response(
+            {"error": "No valid fields to update"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if "emotion" in update_data:
+        valid_emotions = Sentence.get_emotion_choices()
+        if update_data["emotion"] not in valid_emotions:
+            return Response(
+                {"error": f"Invalid emotion. Choices: {valid_emotions}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    if "sentence" in update_data:
+        if not update_data["sentence"].strip():
+            return Response(
+                {"error": "Sentence cannot be empty"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        converter = ConvertTextToJson()
+        update_data["tts_text"] = converter.to_syllable_text(update_data["sentence"])
+
+    for field, value in update_data.items():
+        setattr(sentence, field, value)
+
+    sentence.save(update_fields=list(update_data.keys()))
+
+    return Response(
+        {
+            "id": sentence.id,
+            "sentence": sentence.sentence,
+            "tts_text": sentence.tts_text,
+            "emotion": sentence.emotion,
+        },
+        status=status.HTTP_200_OK,
+    )
+ 
+ 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def emotion_choices(request):
+ 
+    return Response({"emotions": Sentence.get_emotion_choices()})

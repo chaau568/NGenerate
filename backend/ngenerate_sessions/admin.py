@@ -1,36 +1,59 @@
 from django.contrib import admin
 from .models import (
     Session,
+    GenerationRun,
     CharacterProfile,
     Sentence,
     SentenceCharacter,
     Character,
     Illustration,
     ProcessingStep,
+    GenerationProcessingStep,
 )
-
-# =========================================================
-# Inlines
-# =========================================================
 
 
 class ProcessingStepInline(admin.TabularInline):
     model = ProcessingStep
     extra = 0
     readonly_fields = ("start_at", "finish_at")
-    ordering = ("phase", "order")
+    ordering = ("order",)
+
+
+class GenerationRunInline(admin.TabularInline):
+    model = GenerationRun
+    extra = 0
+    readonly_fields = (
+        "version",
+        "status",
+        "generate_credits",
+        "locked_credits",
+        "generation_finished_at",
+        "created_at",
+    )
+    fields = (
+        "version",
+        "style",
+        "narrator_voice",
+        "status",
+        "generate_credits",
+        "locked_credits",
+        "generation_finished_at",
+    )
+    ordering = ("-version",)
+    show_change_link = True
 
 
 class SentenceCharacterInline(admin.TabularInline):
     model = SentenceCharacter
     extra = 0
-    # ต้องมี search_fields ใน CharacterAdmin ถึงจะใช้ autocomplete ได้
     autocomplete_fields = ["character"]
 
 
-# =========================================================
-# Session Admin
-# =========================================================
+class GenerationProcessingStepInline(admin.TabularInline):
+    model = GenerationProcessingStep
+    extra = 0
+    readonly_fields = ("start_at", "finish_at")
+    ordering = ("order",)
 
 
 @admin.register(Session)
@@ -43,7 +66,6 @@ class SessionAdmin(admin.ModelAdmin):
         "session_type",
         "style",
         "is_analysis_done",
-        "is_generation_done",
         "created_at",
     )
     list_filter = (
@@ -51,24 +73,16 @@ class SessionAdmin(admin.ModelAdmin):
         "session_type",
         "style",
         "is_analysis_done",
-        "is_generation_done",
     )
     search_fields = ("name", "novel__title", "novel__user__email")
-
-    # ย้ายฟิลด์คำนวณและฟิลด์เวลามาไว้ใน readonly
     readonly_fields = (
         "analyze_credits",
-        "generate_credits",
         "locked_credits",
         "created_at",
         "analysis_finished_at",
-        "generation_finished_at",
     )
-
     filter_horizontal = ("chapters",)
-    inlines = [ProcessingStepInline]
-
-    # เพิ่ม autocomplete สำหรับ novel เพื่อป้องกัน dropdown ค้างถ้าข้อมูลเยอะ
+    inlines = [ProcessingStepInline, GenerationRunInline]
     autocomplete_fields = ["novel"]
 
     fieldsets = (
@@ -88,16 +102,19 @@ class SessionAdmin(admin.ModelAdmin):
         ),
         (
             "Credit & Billing",
-            {"fields": ("analyze_credits", "generate_credits", "locked_credits")},
+            {
+                "fields": (
+                    "analyze_credits",
+                    "locked_credits",
+                )
+            },
         ),
         (
             "Progress Flags",
             {
                 "fields": (
                     "is_analysis_done",
-                    "is_generation_done",
                     "analysis_finished_at",
-                    "generation_finished_at",
                     "created_at",
                 )
             },
@@ -105,9 +122,30 @@ class SessionAdmin(admin.ModelAdmin):
     )
 
 
-# =========================================================
-# Character Profile Admin
-# =========================================================
+@admin.register(GenerationRun)
+class GenerationRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "session",
+        "version",
+        "style",
+        "narrator_voice",
+        "status",
+        "generate_credits",
+        "generation_finished_at",
+        "created_at",
+    )
+    list_filter = ("status", "style")
+    search_fields = ("session__name", "session__novel__title")
+    readonly_fields = (
+        "version",
+        "generate_credits",
+        "locked_credits",
+        "generation_finished_at",
+        "created_at",
+    )
+    inlines = [GenerationProcessingStepInline]
+    autocomplete_fields = ["session"]
 
 
 @admin.register(CharacterProfile)
@@ -116,27 +154,37 @@ class CharacterProfileAdmin(admin.ModelAdmin):
     list_filter = ("sex", "race")
     search_fields = ("name", "novel__title")
     readonly_fields = ("updated_at",)
-    # จำเป็นสำหรับการทำ autocomplete ในหน้าอื่นๆ
     ordering = ["name"]
-
-
-# =========================================================
-# Character Admin
-# =========================================================
 
 
 @admin.register(Character)
 class CharacterAdmin(admin.ModelAdmin):
-    list_display = ("session", "chapter", "character_profile", "emotion")
+    list_display = (
+        "id",
+        "session",
+        "get_chapter",
+        "get_scene_index",
+        "character_profile",
+        "emotion",
+    )
     list_filter = ("emotion", "session")
-    # สำคัญ: ต้องเพิ่ม search_fields เพื่อให้ SentenceCharacterInline ใช้งาน autocomplete ได้
     search_fields = ("character_profile__name", "emotion")
-    autocomplete_fields = ["session", "chapter", "character_profile"]
+    autocomplete_fields = ["session", "illustration", "character_profile"]
 
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("session", "illustration__chapter", "character_profile")
+        )
 
-# =========================================================
-# Sentence Admin
-# =========================================================
+    @admin.display(description="Chapter", ordering="illustration__chapter__order")
+    def get_chapter(self, obj):
+        return f"Ch {obj.illustration.chapter.order}"
+
+    @admin.display(description="Scene", ordering="illustration__scene_index")
+    def get_scene_index(self, obj):
+        return obj.illustration.scene_index
 
 
 @admin.register(Sentence)
@@ -180,28 +228,39 @@ class SentenceAdmin(admin.ModelAdmin):
         return obj.sentence[:50] + "..." if len(obj.sentence) > 50 else obj.sentence
 
 
-# =========================================================
-# Illustration & Processing Step
-# =========================================================
-
-
 @admin.register(Illustration)
 class IllustrationAdmin(admin.ModelAdmin):
-    list_display = ("id", "session", "chapter")
-    search_fields = ("session__name", "positive_prompt")
+    list_display = (
+        "id",
+        "session",
+        "chapter",
+        "scene_index",
+        "sentence_start",
+        "sentence_end",
+        "scene_description",
+    )
+    list_filter = ("session", "chapter")
+    search_fields = ("session__name", "scene_description", "positive_prompt")
     autocomplete_fields = ["session", "chapter"]
+    readonly_fields = ("sentence_start", "sentence_end")
 
 
 @admin.register(ProcessingStep)
 class ProcessingStepAdmin(admin.ModelAdmin):
+    list_display = ("session", "name", "order", "status", "start_at", "finish_at")
+    list_filter = ("status", "session")
+    search_fields = ("name", "session__name")
+
+
+@admin.register(GenerationProcessingStep)
+class GenerationProcessingStepAdmin(admin.ModelAdmin):
     list_display = (
-        "session",
-        "phase",
+        "generation_run",
         "name",
         "order",
         "status",
         "start_at",
         "finish_at",
     )
-    list_filter = ("phase", "status", "session")
-    search_fields = ("name", "session__name")
+    list_filter = ("status",)
+    search_fields = ("name", "generation_run__session__name")

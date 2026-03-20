@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clientFetch } from "@/lib/client-fetch";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Sparkles, Zap, Crown } from "lucide-react";
 import styles from "./page.module.css";
 
 interface Package {
@@ -12,6 +12,8 @@ interface Package {
   recommendation: string;
   features: string[];
 }
+
+const ICONS = [Zap, Sparkles, Crown];
 
 export default function PackageListPage() {
   const [packages, setPackages] = useState<Package[]>([]);
@@ -27,39 +29,82 @@ export default function PackageListPage() {
       });
   }, []);
 
-  const handleSelect = (id: number) => {
-    router.push(`/package/${id}`);
-  };
-
-  if (loading) return <div className={styles.loading}>Loading Packages...</div>;
+  if (loading)
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingBar}>
+          <div className={styles.loadingFill} />
+        </div>
+        <span>Loading Packages…</span>
+      </div>
+    );
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>All Packages</h1>
+      <div className={styles.headSection}>
+        <p className={styles.eyebrow}>Pricing</p>
+        <h1 className={styles.title}>Choose your package</h1>
+        <p className={styles.subtitle}>
+          Turn novels into AI-generated videos. Select a top-up package to get
+          the credits you need.
+        </p>
+      </div>
+
       <div className={styles.grid}>
-        {packages.map((pkg) => (
-          <div key={pkg.id} className={styles.card}>
-            <div className={styles.tag}>{pkg.recommendation || "Plan"}</div>
-            <h2 className={styles.packageName}>{pkg.name}</h2>
-            <div className={styles.price}>
-              ฿{pkg.price}
-              <span>/month</span>
-            </div>
-            <button
-              className={styles.buyBtn}
-              onClick={() => handleSelect(pkg.id)}
+        {packages.map((pkg, i) => {
+          const Icon = ICONS[i % ICONS.length];
+          const isFeatured = pkg.recommendation
+            ?.toLowerCase()
+            .includes("best seller");
+
+          return (
+            <div
+              key={pkg.id}
+              className={`${styles.card} ${isFeatured ? styles.cardFeatured : ""}`}
             >
-              Get Started
-            </button>
-            <ul className={styles.featureList}>
-              {pkg.features?.map((feat, i) => (
-                <li key={i} className={styles.featureItem}>
-                  <CheckCircle2 size={16} /> {feat}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+              {isFeatured && (
+                <div className={styles.featuredBadge}>Most Popular</div>
+              )}
+
+              <div className={styles.cardTop}>
+                <div
+                  className={`${styles.iconWrap} ${isFeatured ? styles.iconWrapFeatured : ""}`}
+                >
+                  <Icon size={20} strokeWidth={1.8} />
+                </div>
+                <div className={styles.cardTag}>
+                  {pkg.recommendation || "Plan"}
+                </div>
+              </div>
+
+              <h2 className={styles.packageName}>{pkg.name}</h2>
+
+              <div className={styles.priceRow}>
+                <span className={styles.currency}>฿</span>
+                <span className={styles.priceNum}>{pkg.price}</span>
+                <span className={styles.priceSuffix}>/mo</span>
+              </div>
+
+              <button
+                className={`${styles.buyBtn} ${isFeatured ? styles.buyBtnFeatured : ""}`}
+                onClick={() => router.push(`/package/${pkg.id}`)}
+              >
+                Get Started
+              </button>
+
+              <div className={styles.divider} />
+
+              <ul className={styles.featureList}>
+                {pkg.features?.map((feat, j) => (
+                  <li key={j} className={styles.featureItem}>
+                    <CheckCircle2 size={14} className={styles.featureIcon} />
+                    <span>{feat}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

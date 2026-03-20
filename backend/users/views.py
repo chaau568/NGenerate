@@ -1,14 +1,6 @@
-# Google Login 2FA Flow ใหม่:
-#
-# เดิม (1 step):
-#   POST /login-google/ { id_token } → JWT ทันที
-#
-# ใหม่ (2 steps):
-#   Step 1: POST /login-google/        { id_token } → ส่ง OTP ไป email → { email, message }
-#   Step 2: POST /login-google/verify/ { email, otp } → JWT
-
 from django.contrib.auth import authenticate, get_user_model
-from .serializers import RegisterSerializer
+from django.core.cache import cache
+from .serializers import RegisterSerializer, RegisterRequestOTPSerializer
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -29,6 +21,63 @@ User = get_user_model()
 
 
 # ── Register ──────────────────────────────────────────────────────────────────
+
+
+# Step 1 — รับข้อมูล validate แล้วส่ง OTP (ยังไม่สร้าง user)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def register_request_otp(request):
+    serializer = RegisterRequestOTPSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    email = serializer.validated_data["email"]
+
+    # เก็บข้อมูล pending ไว้ใน cache/session ชั่วคราว
+    # (ไม่สร้าง user ก่อน เพราะ email ยังไม่ verified)
+    cache.set(
+        f"register_pending:{email}",
+        {
+            "email": email,
+            "password": serializer.validated_data["password"],
+            "username": serializer.validated_data.get("username"),
+        },
+        timeout=600,
+    )  # หมดอายุ 10 นาที
+
+    OTPService.generate_and_send(email=email, purpose="register")
+
+    return Response({"email": email, "message": f"OTP sent to {email}"})
+
+
+# Step 2 — เช็ค OTP แล้วสร้าง user จริง
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def register_verify_otp(request):
+    email = request.data.get("email", "").lower().strip()
+    otp_code = request.data.get("otp", "").strip()
+
+    if not email or not otp_code:
+        return Response({"error": "email and otp are required"}, status=400)
+
+    is_valid = OTPService.verify(email=email, code=otp_code, purpose="register")
+    if not is_valid:
+        return Response({"error": "Invalid or expired OTP"}, status=400)
+
+    # ดึงข้อมูลที่เก็บไว้ใน cache
+    pending = cache.get(f"register_pending:{email}")
+    if not pending:
+        return Response(
+            {"error": "Registration session expired. Please start over."}, status=400
+        )
+
+    # สร้าง user จริง
+    user = User.objects.create_user(**pending)
+    cache.delete(f"register_pending:{email}")
+
+    refresh = RefreshToken.for_user(user)
+    return Response(
+        {"access": str(refresh.access_token), "refresh": str(refresh)}, status=201
+    )
 
 
 @api_view(["POST"])

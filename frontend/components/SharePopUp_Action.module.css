@@ -1,116 +1,149 @@
-.overlay {
+.modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1100;
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.2s ease-out;
+  backdrop-filter: blur(10px);
+  animation: overlayIn 0.18s ease;
 }
 
-.modal {
-  background: #1e1e1e;
-  padding: 40px 30px;
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  background: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 20px;
-  max-width: 360px;
+  padding: 32px 28px 28px;
+  max-width: 340px;
   width: 90%;
   text-align: center;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  animation: slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 32px 64px rgba(0, 0, 0, 0.55);
+  animation: modalIn 0.22s cubic-bezier(0.34, 1.26, 0.64, 1);
 }
 
-.successIcon {
-  color: #22c55e;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.4));
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
-.errorIcon {
-  color: #ef4444;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.4));
-}
-
-.sessionIcon {
-  color: #f59e0b;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.4));
-}
-
-.modal h2 {
-  font-size: 22px;
-  font-weight: 800;
-  color: #fff;
-  margin-bottom: 12px;
-}
-
-.modal p {
-  font-size: 14px;
-  color: #cbd5e1;
-  margin-bottom: 25px;
-  line-height: 1.5;
-}
-
-.actions {
+/* Icon base */
+.modalIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   display: flex;
-  gap: 12px;
+  align-items: center;
   justify-content: center;
+  margin: 0 auto 18px;
 }
 
-.primaryBtn {
-  flex: 1;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 15px;
-  transition: all 0.2s;
-  background: #3b82f6;
-  color: white;
+.iconSuccess {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  color: #4ade80;
 }
 
-.primaryBtn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+.iconError {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: #f87171;
+}
+
+.iconSession {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+}
+
+.title {
+  font-size: 19px;
+  font-weight: 800;
+  color: #f0efe9;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+}
+
+.message {
+  font-size: 13.5px;
+  color: rgba(240, 239, 233, 0.45);
+  line-height: 1.6;
+  margin: 0 0 22px;
+}
+
+/* Buttons */
+.modalActions {
+  display: flex;
+  gap: 10px;
 }
 
 .secondaryBtn {
   flex: 1;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid #374151;
-  background: transparent;
-  color: #e5e7eb;
-  cursor: pointer;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(240, 239, 233, 0.6);
+  font-size: 13px;
   font-weight: 600;
-  font-size: 15px;
-  transition: all 0.2s;
+  cursor: pointer;
+  transition:
+    background 0.13s,
+    color 0.13s;
 }
 
 .secondaryBtn:hover {
-  background: #2a2a2a;
+  background: rgba(255, 255, 255, 0.09);
+  color: #f0efe9;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.primaryBtn {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    filter 0.13s,
+    transform 0.1s;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.primaryBtn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.primaryBtn:active {
+  transform: translateY(0);
+}
+
+/* Primary button colors per type */
+.btnSuccess {
+  background: rgba(34, 197, 94, 0.85);
+}
+.btnError {
+  background: rgba(239, 68, 68, 0.85);
+}
+.btnSession {
+  background: rgba(245, 158, 11, 0.85);
 }

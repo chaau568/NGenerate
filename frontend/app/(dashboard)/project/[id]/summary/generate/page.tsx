@@ -3,7 +3,16 @@
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
-import { ChevronLeft } from "lucide-react";
+import {
+  ChevronLeft,
+  Sparkles,
+  Film,
+  Check,
+  X,
+  User,
+  ImageIcon,
+  MessageSquare,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 import styles from "./page.module.css";
 
@@ -11,9 +20,7 @@ import SharePopUpSuccess from "@/components/SharePopUp_Success";
 import SharePopUpFailed from "@/components/SharePopUp_Failed";
 
 interface SummaryResponse {
-  details: {
-    session_name: string;
-  };
+  details: { session_name: string };
   summary: {
     sentence_count: number;
     character_count: number;
@@ -24,6 +31,8 @@ interface SummaryResponse {
   status: string;
 }
 
+const DEMO_CREDIT = 10;
+
 export default function GenerateSummaryPage() {
   const router = useRouter();
   const params = useParams();
@@ -31,13 +40,9 @@ export default function GenerateSummaryPage() {
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
-
-  // State สำหรับการแก้ไขชื่อ
   const [sessionName, setSessionName] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [nameChanged, setNameChanged] = useState(false);
-
-  /* ================= FETCH SUMMARY ================= */
 
   const { data, isLoading, refetch } = useQuery<SummaryResponse>({
     queryKey: ["generateSummary", sessionId],
@@ -57,11 +62,8 @@ export default function GenerateSummaryPage() {
     }
   }, [data]);
 
-  /* ================= EDIT NAME MUTATION ================= */
-
   const editMutation = useMutation({
     mutationFn: async (payload: any) => {
-      // ใช้ endpoint เดียวกันกับ analyze ตามที่กำหนด
       const res = await clientFetch(
         `/api/project/${sessionId}/summary/analyze`,
         {
@@ -79,17 +81,6 @@ export default function GenerateSummaryPage() {
     },
   });
 
-  const handleConfirmName = () => {
-    editMutation.mutate({ name: sessionName });
-  };
-
-  const handleCancelName = () => {
-    setSessionName(originalName);
-    setNameChanged(false);
-  };
-
-  /* ================= GENERATE ================= */
-
   const generateMutation = useMutation({
     mutationFn: async () => {
       const res = await clientFetch(`/api/project/${sessionId}/generate`, {
@@ -103,128 +94,205 @@ export default function GenerateSummaryPage() {
   });
 
   if (isLoading || !data) {
-    return <div className={styles.loading}>Loading summary...</div>;
+    return (
+      <div className={styles.loadingState}>
+        <div className={styles.loadingBar}>
+          <div className={styles.loadingFill} />
+        </div>
+        <span>Loading Summary...</span>
+      </div>
+    );
   }
 
   const { summary } = data;
-  const DEMO_CREDIT = 10;
   const notEnoughCredit =
     summary.credits_remaining < summary.total_credit_required;
   const notEnoughDemoCredit = summary.credits_remaining < DEMO_CREDIT;
 
+  const ASSET_ROWS = [
+    {
+      icon: <MessageSquare size={14} />,
+      label: "Narrator Voice",
+      value: summary.sentence_count,
+      color: "blue",
+    },
+    {
+      icon: <User size={14} />,
+      label: "Character Images",
+      value: summary.character_count,
+      color: "purple",
+    },
+    {
+      icon: <ImageIcon size={14} />,
+      label: "Scene Images",
+      value: summary.scene_count,
+      color: "teal",
+    },
+  ];
+
   return (
     <div className={styles.container}>
+      {/* ── Header ── */}
       <header className={styles.header}>
-        <div className={styles.headerLeft}>
-          <button onClick={() => router.back()} className={styles.backBtn}>
-            <ChevronLeft size={22} />
-          </button>
-          <h1>Create New Video</h1>
+        <button onClick={() => router.back()} className={styles.backBtn}>
+          <ChevronLeft size={20} />
+        </button>
+        <div>
+          <h1 className={styles.title}>New Video</h1>
+          <p className={styles.subtitle}>
+            Review assets and launch AI video generation
+          </p>
         </div>
       </header>
 
-      {/* ================= Editable Session Name (Modern Style) ================= */}
-      <div className={styles.sessionWrapper}>
-        <div className={styles.labelTitle}>Video Title</div>
-        <div className={styles.sessionEditRow}>
+      {/* ── Session name ── */}
+      <div className={styles.configBlock}>
+        <label className={styles.configLabel}>Video Title</label>
+        <div className={styles.nameRow}>
           <input
             value={sessionName}
             onChange={(e) => {
               setSessionName(e.target.value);
               setNameChanged(e.target.value !== originalName);
             }}
-            className={styles.sessionInput}
-            placeholder="Enter video name..."
+            className={styles.nameInput}
+            placeholder="Enter video name…"
           />
-
-          <div className={styles.actionButtons}>
-            <button
-              className={styles.cancelBtn}
-              onClick={handleCancelName}
-              disabled={!nameChanged || editMutation.isPending}
-            >
-              Cancel
-            </button>
-            <button
-              className={styles.confirmBtn}
-              onClick={handleConfirmName}
-              disabled={!nameChanged || editMutation.isPending}
-            >
-              Confirm
-            </button>
-          </div>
+          {nameChanged && (
+            <div className={styles.nameActions}>
+              <button
+                className={styles.nameCancel}
+                onClick={() => {
+                  setSessionName(originalName);
+                  setNameChanged(false);
+                }}
+                disabled={editMutation.isPending}
+              >
+                <X size={14} />
+              </button>
+              <button
+                className={styles.nameConfirm}
+                onClick={() => editMutation.mutate({ name: sessionName })}
+                disabled={editMutation.isPending}
+              >
+                <Check size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* ── Main card ── */}
       <div className={styles.card}>
-        {/* ================= LEFT ================= */}
+        {/* LEFT — asset summary */}
         <div className={styles.summarySection}>
-          <h2>Summary</h2>
-          <div className={styles.summaryGrid}>
-            <div>
-              <p>Sentence Assets</p>
-              <strong>{summary.sentence_count}</strong>
+          <div className={styles.sectionHead}>
+            <Film size={14} className={styles.sectionIcon} />
+            <span className={styles.sectionTitle}>Asset Summary</span>
+          </div>
+
+          <div className={styles.assetList}>
+            {ASSET_ROWS.map(({ icon, label, value, color }) => (
+              <div
+                key={label}
+                className={`${styles.assetRow} ${styles[`assetRow_${color}`]}`}
+              >
+                <div
+                  className={`${styles.assetIcon} ${styles[`assetIcon_${color}`]}`}
+                >
+                  {icon}
+                </div>
+                <span className={styles.assetLabel}>{label}</span>
+                <span className={styles.assetValue}>
+                  {value.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className={styles.creditRows}>
+            <div className={styles.summaryDivider} />
+            <div className={`${styles.creditRow} ${styles.creditTotal}`}>
+              <span className={styles.creditKey}>Total credits required</span>
+              <span className={styles.creditValBig}>
+                {summary.total_credit_required.toLocaleString()}
+              </span>
             </div>
-            <div>
-              <p>Image Assets (Character)</p>
-              <strong>{summary.character_count}</strong>
-            </div>
-            <div>
-              <p>Image Assets (Scene)</p>
-              <strong>{summary.scene_count}</strong>
-            </div>
-            <div className={styles.total}>
-              <p>Total Credits Required</p>
-              <strong>{summary.total_credit_required}</strong>
-            </div>
-            <div className={styles.remaining}>
-              <p>Credits Remaining</p>
-              <strong>{summary.credits_remaining.toLocaleString()}</strong>
+            <div
+              className={`${styles.creditRow} ${notEnoughCredit ? styles.creditLow : styles.creditOk}`}
+            >
+              <span className={styles.creditKey}>Your balance</span>
+              <span className={styles.creditValBig}>
+                {summary.credits_remaining.toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* ================= RIGHT ================= */}
+        {/* RIGHT — actions */}
         <div className={styles.actionSection}>
-          <button
-            className={styles.demoBtn}
-            disabled={generateMutation.isPending || notEnoughDemoCredit}
-          >
-            {generateMutation.isPending
-              ? "Generating..."
-              : `Generate Demo (10 Credits)`}
-          </button>
+          <div className={styles.sectionHead}>
+            <span className={styles.sectionTitle}>Launch</span>
+          </div>
 
-          <button
-            className={styles.generateBtn}
-            onClick={() => generateMutation.mutate()}
-            disabled={generateMutation.isPending || notEnoughCredit}
-          >
-            {generateMutation.isPending
-              ? "Generating..."
-              : `Generate (${summary.total_credit_required} Credits)`}
-          </button>
+          <div className={styles.actionPad}>
+            {/* Demo button */}
+            <div className={styles.demoWrap}>
+              <button
+                className={styles.demoBtn}
+                disabled={generateMutation.isPending || notEnoughDemoCredit}
+              >
+                <Sparkles size={14} />
+                {generateMutation.isPending ? "Generating…" : "Generate Demo"}
+              </button>
+              <span className={styles.demoNote}>
+                {DEMO_CREDIT} credits · short preview
+              </span>
+            </div>
 
-          {notEnoughCredit && (
-            <p className={styles.warning}>
-              Not enough credits to generate this video.
-            </p>
-          )}
+            <div className={styles.orDivider}>
+              <span>or</span>
+            </div>
+
+            {/* Full generate */}
+            <button
+              className={styles.generateBtn}
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending || notEnoughCredit}
+            >
+              {generateMutation.isPending ? (
+                <>
+                  <span className={styles.btnSpinner} /> Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={17} /> Generate Full ·{" "}
+                  {summary.total_credit_required.toLocaleString()} Credits
+                </>
+              )}
+            </button>
+
+            {notEnoughCredit && (
+              <p className={styles.warning}>
+                Insufficient credits — top up to continue.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       <SharePopUpSuccess
         isOpen={showSuccess}
-        title="Video generation started successfully!"
+        title="Generation started!"
+        message="Your video is being generated. Check the project page for updates."
         onClose={() => {
           setShowSuccess(false);
           router.push("/project");
         }}
       />
-
       <SharePopUpFailed
         isOpen={showFailed}
-        title="Generation Failed"
+        title="Generation failed"
         message="Unable to start video generation. Please try again."
         onClose={() => setShowFailed(false)}
       />

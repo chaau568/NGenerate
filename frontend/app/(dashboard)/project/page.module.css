@@ -1,102 +1,283 @@
+/* ── BASE ── */
 .container {
-  padding: 16px 24px 40px;
-  max-width: 1200px;
+  padding: 32px 32px 80px;
+  max-width: 1280px;
   margin: 0 auto;
-  color: white;
-}
-
-.title {
-  font-size: 28px;
-  font-weight: 900;
-  margin: 40px 0 20px;
+  color: #f0efe9;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
 }
 
 .statusText {
   text-align: center;
   padding: 80px;
-  color: #94a3b8;
+  color: rgba(240, 239, 233, 0.35);
+  font-size: 14px;
 }
 
-/* ================= CURRENT TASK ================= */
-
-.currentCard {
-  background: #3b82f626;
-  border-radius: 16px;
-  padding: 22px;
-  margin-bottom: 20px;
-  transition: 0.25s ease;
-  cursor: pointer;
-  overflow: hidden; /* กันล้น */
-}
-
-.currentCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
-}
-
-.currentHeader {
+/* ── LOADING ── */
+.loadingState {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
+  padding: 80px 40px;
+  color: rgba(240, 239, 233, 0.3);
+  font-size: 13px;
 }
 
-/* สำคัญมาก */
-.leftSection {
+.loadingBar {
+  width: 200px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loadingFill {
+  height: 100%;
+  width: 40%;
+  background: rgba(59, 130, 246, 0.5);
+  border-radius: 2px;
+  animation: loadSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes loadSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* ── EMPTY ── */
+.emptyContainer {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  max-width: 380px;
+}
+
+.emptyIcon {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(59, 130, 246, 0.6);
+  margin-bottom: 8px;
+}
+
+.emptyTitle {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.emptyDesc {
+  font-size: 14px;
+  color: rgba(240, 239, 233, 0.45);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.emptyBtn {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
+  background: #2563eb;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.emptyBtn:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+/* ── SECTION ── */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.sectionTitle {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+/* ── RUNNING CARDS ── */
+.runningList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.runningCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px 18px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.runningCard:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.runningTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.runningLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 1;
   min-width: 0;
 }
 
-.sessionTitle {
-  font-size: 20px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ด้านขวา fix ไม่ให้ล้น */
-.rightGroup {
+.liveChip {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
-.progressText {
-  color: #facc15;
-  font-weight: 700;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.liveChipGen {
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.3);
+  color: #fdba74;
 }
 
-/* Progress bar */
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.4s ease-in-out infinite;
+}
 
-.progressBarWrapper {
-  margin-top: 16px;
-  background: #334155;
-  border-radius: 999px;
-  height: 12px;
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.runningName {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #f0efe9;
+}
+
+.runningRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.runningPct {
+  font-size: 16px;
+  font-weight: 800;
+  color: #f0efe9;
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
+
+.runningBar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 99px;
   overflow: hidden;
 }
 
-.progressBar {
+.runningFill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: 99px;
   transition: width 0.4s ease;
 }
 
-.progressActive {
-  background: linear-gradient(90deg, #327ef7, #60a5fa, #3782f9);
+.fillAnalyze {
+  background: linear-gradient(90deg, #2563eb, #60a5fa, #2563eb);
   background-size: 200% 100%;
   animation: flow 2s linear infinite;
 }
 
-.failedStatus {
-  color: #ef4444;
-  font-weight: 700;
+.fillGen {
+  background: linear-gradient(90deg, #ea580c, #fb923c, #ea580c);
+  background-size: 200% 100%;
+  animation: flow 2s linear infinite;
 }
 
 @keyframes flow {
@@ -108,294 +289,300 @@
   }
 }
 
-/* animated dots */
-
-.working {
-  display: inline-flex;
-  position: relative;
-  padding-right: 20px;
-}
-
-.working::after {
-  content: "";
-  position: absolute;
-  left: 80%;
-  padding-left: 2px;
-  /* text-align: left; */
-  animation: dots 2.5s infinite steps(4);
-}
-
-@keyframes dots {
-  0% {
-    content: "";
-  }
-  25% {
-    content: ".";
-  }
-  50% {
-    content: "..";
-  }
-  75% {
-    content: "...";
-  }
-  100% {
-    content: "";
-  }
-}
-
-/* ================= GRID ================= */
-
-.grid {
+/* ── COLUMNS ── */
+.columns {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 28px;
   align-items: start;
 }
 
-.expandCard {
-  background: #3b82f626;
-  border-radius: 18px;
-  padding: 22px;
+.col {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  min-height: 220px;
-  transition:
-    transform 0.35s ease,
-    box-shadow 0.35s ease;
-  transform-origin: center;
-}
-
-.expandCard:hover {
-  transform: scale(1.05) translateY(-6px);
-  z-index: 5;
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.45);
-}
-
-.cardMain {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.status {
-  color: #94a3b8;
-}
-
-.version {
-  color: #60a5fa;
-  font-weight: 600;
-}
-
-/* ================= BUTTONS ================= */
-
-.actions {
-  display: flex;
   gap: 12px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.viewBtn,
-.generateBtn,
-.watchBtn,
-.downloadBtn {
+.colHead {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  white-space: nowrap;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.viewBtn {
-  background: #2563eb;
-  color: white;
-  padding: 10px 22px;
+.colDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.viewBtn:hover {
-  background: #1d4ed8;
+.colTitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(240, 239, 233, 0.7);
 }
 
-.generateBtn {
-  background: #facc15;
-  color: black;
-  padding: 8px 14px;
+.colCount {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(240, 239, 233, 0.4);
 }
 
-.watchBtn {
-  background: #3b82f6;
-  color: white;
-  padding: 8px 14px;
-}
-
-.downloadBtn {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: none;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: 0.25s;
-}
-
-.downloadBtn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 28px rgba(139, 92, 246, 0.6);
-}
-
-.deleteBtn {
-  background: #ef4444;
-  border: none;
-  color: white;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.metaInfo {
+.cardStack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 18px;
-  color: #94a3b8;
-  font-size: 14px;
+  gap: 10px;
 }
 
-.cardContent {
-  display: flex;
-  gap: 18px;
-}
-
-/* Cover fixed width */
-.coverWrapper {
-  position: relative;
-  width: 150px;
-  height: 200px;
+/* ── CARD ── */
+.card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   overflow: hidden;
-  flex-shrink: 0;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.cardFailed {
+  opacity: 0.8;
+}
+.cardFailed:hover {
+  opacity: 1;
+}
+
+/* cover 16:9 */
+.cardCover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
 }
 
 .coverImg {
   object-fit: cover;
 }
 
-/* Right section */
-.infoSection {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow: hidden;
+.coverOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(0, 0, 0, 0.7) 100%
+  );
 }
 
-.cardTitle {
-  font-size: 18px;
+.coverOverlayFailed {
+  background: linear-gradient(
+    to bottom,
+    rgba(239, 68, 68, 0.08) 0%,
+    rgba(0, 0, 0, 0.75) 100%
+  );
+}
+
+.cardStatusChip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 10px;
   font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid;
+  backdrop-filter: blur(6px);
 }
 
-/* ===== Hidden by default ===== */
-
-.extraInfo {
-  opacity: 0;
-  transform: translateX(-15px);
-  transition:
-    opacity 0.3s ease,
-    transform 0.3s ease;
-  margin-top: 10px;
-  color: #94a3b8;
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.expandCard:hover .extraInfo {
-  opacity: 1;
-  transform: translateX(0);
-  transition-delay: 0.1s;
-}
-
-.emptyContainer {
-  min-height: 60vh;
+/* Play button overlay */
+.playOverlay {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
-}
-
-.emptyContent {
-  max-width: 450px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 24px;
-}
-
-.iconWrapper {
-  width: 110px;
-  height: 110px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #3b82f6;
-  border: 1px dashed rgba(59, 130, 246, 0.4);
-  margin-bottom: 8px;
-}
-
-.emptyTitle {
-  font-size: 26px;
-  font-weight: 800;
-  color: #f8fafc;
-  margin: 0;
-}
-
-.emptyDescription {
-  color: #94a3b8;
-  font-size: 16px;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.createFirstBtn {
-  background: #2563eb;
-  color: white;
-  padding: 14px 28px;
-  border-radius: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  background: rgba(0, 0, 0, 0);
   border: none;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+  transition: background 0.2s;
+  opacity: 0;
+}
+.card:hover .playOverlay {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.35);
 }
 
-.createFirstBtn:hover {
-  background: #1d4ed8;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+/* ── CARD BODY ── */
+.cardBody {
+  padding: 12px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cardName {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  color: #f0efe9;
+  /* clamp to 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.cardDate {
+  font-size: 11px;
+  color: rgba(240, 239, 233, 0.35);
+  margin: 0;
+}
+
+.cardMeta {
+  font-size: 11px;
+  color: rgba(240, 239, 233, 0.3);
+  margin: 0;
+}
+
+/* ── CARD FOOTER ── */
+.cardFooter {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 13px;
+  align-items: center;
+}
+
+.primaryBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.1);
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.primaryBtn:hover {
+  background: rgba(250, 204, 21, 0.18);
+}
+
+.retryBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.retryBtn:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.ghostBtn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(240, 239, 233, 0.55);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+}
+.ghostBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f0efe9;
+}
+
+.dangerBtn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: #fca5a5;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.dangerBtn:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+/* ── ICON BTNS (running row) ── */
+.iconBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(240, 239, 233, 0.6);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f0efe9;
+}
+
+.iconBtnDanger {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.06);
+  color: #fca5a5;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.iconBtnDanger:hover {
+  background: rgba(239, 68, 68, 0.15);
 }

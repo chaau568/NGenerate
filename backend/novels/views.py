@@ -307,6 +307,7 @@ def create_chapter(request, novel_id):
             novel=novel,
             task_type="upload",
             message=f"Processing file {file_obj.name}",
+            file_path=file_path,
         )
 
         process_uploaded_file_task.delay(
@@ -355,4 +356,56 @@ def chapter_detail(request, chapter_id):
             "is_analyzed": chapter.is_analyzed,
         },
         status=status.HTTP_200_OK,
+    )
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def retry_upload(request, novel_id, notification_id):
+    get_object_or_404(
+        __import__("novels.models", fromlist=["Novel"]).Novel,
+        id=novel_id,
+        user=request.user,
+    )
+
+    notification = get_object_or_404(
+        Notification,
+        id=notification_id,
+        user=request.user,
+        novel_id=novel_id,
+        task_type="upload",
+    )
+
+    if notification.status != "error":
+        return Response(
+            {"error": "Only failed upload notifications can be retried."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    file_path = notification.file_path
+
+    if not file_path or not os.path.exists(file_path):
+        return Response(
+            {
+                "error": "Original file no longer available. Please re-upload the file.",
+                "code": "FILE_NOT_FOUND",
+            },
+            status=status.HTTP_410_GONE,
+        )
+
+    notification.status = "processing"
+    notification.message = "Re-processing file (retry)..."
+    notification.save(update_fields=["status", "message"])
+
+    process_uploaded_file_task.delay(
+        notification.novel_id,
+        file_path,
+        notification.id,
+    )
+
+    return Response(
+        {
+            "message": "Upload retry started.",
+            "notification_id": notification.id,
+        },
+        status=status.HTTP_202_ACCEPTED,
     )

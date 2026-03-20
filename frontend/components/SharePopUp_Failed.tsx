@@ -1,6 +1,6 @@
 "use client";
 
-import { XCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import styles from "./SharePopUp_Failed.module.css";
 
 interface SharePopUpFailedProps {
@@ -13,8 +13,8 @@ interface SharePopUpFailedProps {
 export default function SharePopUpFailed({
   isOpen,
   onClose,
-  title = "Update Failed",
-  message = "Something went wrong.",
+  title = "Something went wrong",
+  message = "An unexpected error occurred. Please try again.",
 }: SharePopUpFailedProps) {
   if (!isOpen) return null;
 
@@ -22,18 +22,15 @@ export default function SharePopUpFailed({
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalIcon}>
-          <XCircle size={60} color="#ef4444" strokeWidth={2.5} />
+          <AlertCircle size={24} />
         </div>
 
         <h3 className={styles.title}>{title}</h3>
-
         <p className={styles.message}>{message}</p>
 
-        <div className={styles.modalActions}>
-          <button className={styles.okBtn} onClick={onClose}>
-            Try Again
-          </button>
-        </div>
+        <button className={styles.okBtn} onClick={onClose}>
+          Try Again
+        </button>
       </div>
     </div>
   );

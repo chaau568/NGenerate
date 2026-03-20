@@ -103,6 +103,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         return User.objects.create_user(**validated_data)
 
 
+# ── RegisterOTPSerializer ───────────────────────────────────────────────────
+
+
+class RegisterRequestOTPSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ("email", "username", "password", "confirm_password")
+
+    def validate_email(self, value):
+        # 1. normalize
+        value = value.lower().strip()
+
+        # 2. เช็ค domain มีจริง + ไม่ใช่ disposable
+        value = validate_email_exists(value)
+
+        # 3. ห้ามซ้ำ (เฉพาะ account ที่ active อยู่)
+        existing = User.objects.filter(email__iexact=value).first()
+        if existing and existing.status != "deleted":
+            raise serializers.ValidationError("This email is already registered.")
+
+        return value
+
+    def validate_password(self, value):
+        return validate_password_strength(value)
+
+    def validate(self, data):
+        if data["password"] != data["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords do not match."}
+            )
+        return data
+
+
 # ── ProfileUpdateSerializer ───────────────────────────────────────────────────
 
 
