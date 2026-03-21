@@ -29,6 +29,8 @@ from .ai_service import AIService
 from .timeline_builder import TimelineBuilder
 from .voice_mapper import VoiceMapper
 
+from utils.runpod_health import wait_for_runpod_ready
+
 logger = logging.getLogger(__name__)
 
 MAX_IMAGE_WORKERS = getattr(settings, "GENERATION_MAX_IMAGE_WORKERS", 2)
@@ -83,6 +85,8 @@ class GenerationWorkflow:
         logger.info(
             f"Start generation workflow | session={self.session.id} | run={self.run.id} | v{self.run.version}"
         )
+        
+        wait_for_runpod_ready(required=["comfyui", "tts"])
 
         self.run.create_processing_steps()
 

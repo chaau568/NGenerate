@@ -18,6 +18,9 @@ from utils.runpod_storage import delete_runpod_folder
 from .tasks import run_analysis_task, run_generation_task
 from .services.convert import ConvertTextToJson
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 # =====================================================
 # CREATE SESSION
@@ -422,7 +425,7 @@ def finished_tasks(request):
             status__in=["analyzed", "failed"],
         )
         .select_related("novel")
-        .prefetch_related("generation_runs__videos")
+        .prefetch_related("generation_runs__video")
         .order_by("-created_at")
     )
 
@@ -442,40 +445,45 @@ def finished_tasks(request):
         }
 
         if s.status == "analyzed":
-            # รวม generation runs ที่ generated แล้ว
-            generated_runs = [
-                r for r in s.generation_runs.all() if r.status == "generated"
-            ]
+            analysis_history.append(
+                {
+                    **base_data,
+                    "analysis_finished_at": s.analysis_finished_at,
+                }
+            )
 
-            if generated_runs:
-                for run in generated_runs:
-                    videos = list(run.videos.all())
-                    latest_video = (
-                        max(videos, key=lambda v: v.version) if videos else None
-                    )
+            for run in s.generation_runs.all():
+                if run.status == "generated":
+                    video = getattr(run, "video", None)
                     generation_history.append(
                         {
                             **base_data,
                             "generation_run_id": run.id,
                             "version": run.version,
-                            "video_id": latest_video.id if latest_video else None,
-                            "file_size": (
-                                latest_video.file_size if latest_video else 0.0
-                            ),
+                            "video_id": video.id if video else None,
+                            "file_size": video.file_size if video else 0.0,
                             "generation_finished_at": run.generation_finished_at,
                         }
                     )
-            else:
-                # ยัง analyze เสร็จ แต่ยังไม่เคย generate
-                analysis_history.append(
-                    {
-                        **base_data,
-                        "analysis_finished_at": s.analysis_finished_at,
-                    }
-                )
+
+                elif run.status == "failed":
+                    failed_history.append(
+                        {
+                            **base_data,
+                            "generation_run_id": run.id,
+                            "version": run.version,
+                            "failed_type": "generation",
+                            "generation_finished_at": run.generation_finished_at,
+                        }
+                    )
 
         elif s.status == "failed":
-            failed_history.append(base_data)
+            failed_history.append(
+                {
+                    **base_data,
+                    "failed_type": "analysis",
+                }
+            )
 
     return Response(
         {
@@ -587,16 +595,15 @@ def view_detail(request, session_id):
 def retry_session(request, session_id):
     session = get_object_or_404(Session, id=session_id, novel__user=request.user)
 
-    if session.status not in ["failed", "analyzed"]:
-        return Response(
-            {"error": "Only failed sessions or analyzed sessions can retry generation"},
-            status=400,
-        )
-
     with transaction.atomic():
 
         if not session.is_analysis_done:
-            # Analysis failed → ล้างทุกอย่างแล้ว re-analyze
+            if session.status != "failed":
+                return Response(
+                    {"error": "Session is not in failed state"},
+                    status=400,
+                )
+
             session.processing_steps.all().delete()
             session.sentences.all().delete()
             session.characters.all().delete()
@@ -604,31 +611,61 @@ def retry_session(request, session_id):
 
             session.status = "draft"
             session.locked_credits = 0
-            session.save()
+            session.save(update_fields=["status", "locked_credits"])
 
             session.start_analysis()
-            transaction.on_commit(lambda: run_analysis_task.delay(session.id))
-            message = (
-                "Analysis failed. Cleared all data and assets, restarting analysis."
+            transaction.on_commit(
+                lambda: run_analysis_task.apply_async(
+                    args=[session.id],
+                    queue="analysis_queue",
+                    priority=5,
+                )
             )
+            message = "Analysis failed. Cleared all data and restarting analysis."
 
         else:
-            # Generation failed → สร้าง GenerationRun ใหม่
-            failed_run = (
-                session.generation_runs.filter(status="failed")
-                .order_by("-version")
-                .first()
-            )
-            if failed_run:
-                # ล้าง assets ของ run ที่ fail
+            if session.status != "analyzed":
+                return Response(
+                    {"error": "Session must be in analyzed state"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if session.generation_runs.filter(status="generating").exists():
+                return Response(
+                    {"error": "Generation is already in progress"}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            failed_runs = session.generation_runs.filter(status="failed")
+            for failed_run in failed_runs:
+                failed_run.character_assets.all().delete()
+                failed_run.voices.all().delete()
+                failed_run.scene_images.all().delete()
                 failed_run.processing_steps.all().delete()
+
+                folder_path = (
+                    f"user_data/user_{session.novel.user_id}"
+                    f"/novel_{session.novel_id}"
+                    f"/session_{session.id}"
+                    f"/v{failed_run.version}"
+                )
+                try:
+                    delete_runpod_folder(folder_path)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to delete RunPod folder v{failed_run.version}: {e}"
+                    )
 
             run = GenerationRun.create_next(session)
             run.start()
 
             run_id = run.id
-            transaction.on_commit(lambda: run_generation_task.delay(run_id))
-            message = f"Generation failed. Starting new generation run v{run.version}."
+            transaction.on_commit(
+                lambda: run_generation_task.apply_async(
+                    args=[run_id],
+                    queue="generation_queue",
+                    priority=7,
+                )
+            )
+            message = f"Starting new generation run v{run.version}."
 
     return Response({"message": message, "status": session.status})
 
@@ -713,7 +750,7 @@ def session_data(request, session_id):
             "illustration",
             "illustration__chapter",
         )
-        .prefetch_related("asset")
+        .prefetch_related("assets")
         .order_by("character_profile__name", "emotion")
     )
 
@@ -738,10 +775,18 @@ def session_data(request, session_id):
             }
 
         emotion_image = None
-        if is_generated and hasattr(char, "asset") and char.asset and char.asset.image:
-            # กรอง asset ตาม generation_run
-            if char.asset.generation_run_id == generation_run.id:
-                emotion_image = build_file_url(char.asset.image)
+        if is_generated:
+            # กรอง asset ตาม generation_run จาก prefetched "assets"
+            matching_asset = next(
+                (
+                    a
+                    for a in char.assets.all()
+                    if a.generation_run_id == generation_run.id
+                ),
+                None,
+            )
+            if matching_asset and matching_asset.image:
+                emotion_image = build_file_url(matching_asset.image)
 
         profile_map[pid]["emotions"].append(
             {
@@ -764,7 +809,14 @@ def session_data(request, session_id):
     for sent in sentences_qs:
         voice_url = None
         if is_generated:
-            voice = sent.voice_assets.filter(generation_run=generation_run).first()
+            voice = next(
+                (
+                    v
+                    for v in sent.voice_assets.all()
+                    if v.generation_run_id == generation_run.id
+                ),
+                None,
+            )
             if voice:
                 voice_url = build_file_url(voice.voice)
 
@@ -793,7 +845,14 @@ def session_data(request, session_id):
     for scene in scenes_qs:
         scene_image = None
         if is_generated:
-            img = scene.image_assets.filter(generation_run=generation_run).first()
+            img = next(
+                (
+                    i
+                    for i in scene.image_assets.all()
+                    if i.generation_run_id == generation_run.id
+                ),
+                None,
+            )
             if img:
                 scene_image = build_file_url(img.image)
 
@@ -899,10 +958,10 @@ def update_sentence(request, session_id, sentence_id):
         },
         status=status.HTTP_200_OK,
     )
- 
- 
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def emotion_choices(request):
- 
+
     return Response({"emotions": Sentence.get_emotion_choices()})

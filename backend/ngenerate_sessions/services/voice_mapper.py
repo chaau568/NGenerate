@@ -6,8 +6,8 @@ class VoiceMapper:
     EMOTION_CONFIGS = {
         "happy": {"speed": 1.0, "cross_fade_duration": 0.1, "step": 50, "cfg": 3.0},
         "neutral": {"speed": 1.0, "cross_fade_duration": 0.1, "step": 48, "cfg": 2.5},
-        "angry": {"speed": 1.1, "cross_fade_duration": 0.3, "step": 48, "cfg": 3.0},
-        "sad": {"speed": 0.9, "cross_fade_duration": 0.1, "step": 48, "cfg": 2.0},
+        "angry": {"speed": 1.1, "cross_fade_duration": 0.1, "step": 48, "cfg": 3.0},
+        "sad": {"speed": 0.9, "cross_fade_duration": 0.2, "step": 48, "cfg": 2.0},
         "serious": {"speed": 1.0, "cross_fade_duration": 0.1, "step": 50, "cfg": 2.5},
     }
     
@@ -24,11 +24,11 @@ class VoiceMapper:
 
         voice_type = session.narrator_voice or VoiceMapper.DEFAULT_VOICE
 
-        # emotion = (sentence.emotion or "neutral").lower()
-        emotion = "neutral"
+        emotion = (sentence.emotion or "neutral").lower()
+        # emotion = "neutral"
 
-        if emotion not in VoiceMapper.VALID_EMOTIONS:
-            emotion = "neutral"
+        # if emotion not in VoiceMapper.VALID_EMOTIONS:
+        #     emotion = "neutral"
             
         config = VoiceMapper.EMOTION_CONFIGS["neutral"]
 

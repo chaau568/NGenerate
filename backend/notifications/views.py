@@ -61,7 +61,6 @@ def notification_detail(request, notification_id):
         "processing": None,
         "session_info": None,
         "novel_info": None,
-        # เพิ่ม: ให้ frontend รู้ว่าจะ retry ไปที่ไหน
         "session_id": notification.session_id,
         "novel_id": notification.novel_id,
         "session_name": notification.session.name if notification.session else None,
@@ -71,44 +70,72 @@ def notification_detail(request, notification_id):
         session = notification.session
         phase = notification.task_type
 
-        if phase in ("analysis", "generation"):
-            steps = session.processing_steps.filter(phase=phase).order_by("order")
-        else:
-            steps = session.processing_steps.none()
+        if phase == "analysis":
+            steps = session.processing_steps.filter(phase="analysis").order_by("order")
 
-        def map_status(step_status, task_phase):
-            if step_status == "success":
-                return "analyzed" if task_phase == "analysis" else "generated"
-            if step_status == "processing":
-                return "analyzing" if task_phase == "analysis" else "generating"
-            if step_status == "failed":
-                return "fail"
-            return "pending"
+            total = steps.count()
+            success_count = steps.filter(status="success").count()
+            phase_progress = round((success_count / total) * 100) if total > 0 else 0
 
-        total = steps.count()
-        success_count = steps.filter(status="success").count()
-        phase_progress = round((success_count / total) * 100) if total > 0 else 0
+            if session.is_analysis_done:
+                phase_progress = 100
 
-        if phase == "analysis" and session.is_analysis_done:
-            phase_progress = 100
-        elif phase == "generation" and session.is_generation_done:
-            phase_progress = 100
+            data["processing"] = {
+                "overall_progress": phase_progress,
+                "started_at": session.created_at,
+                "steps": [
+                    {
+                        "id": step.id,
+                        "name": step.name,
+                        "status": (
+                            "analyzed"
+                            if step.status == "success"
+                            else (
+                                "analyzing"
+                                if step.status == "processing"
+                                else "fail" if step.status == "failed" else "pending"
+                            )
+                        ),
+                        "started_at": step.start_at,
+                        "finished_at": step.finish_at,
+                        "error_message": step.error_message or None,
+                    }
+                    for step in steps
+                ],
+            }
 
-        data["processing"] = {
-            "overall_progress": phase_progress,
-            "started_at": session.created_at,
-            "steps": [
-                {
-                    "id": step.id,
-                    "name": step.name,
-                    "status": map_status(step.status, phase),
-                    "started_at": step.start_at,
-                    "finished_at": step.finish_at,
-                    "error_message": step.error_message or None,
+        elif phase == "generation":
+            generation_run = notification.generation_run
+
+            if generation_run:
+                steps = generation_run.processing_steps.all().order_by("order")
+                phase_progress = generation_run.get_progress_percentage()
+
+                data["processing"] = {
+                    "overall_progress": phase_progress,
+                    "started_at": generation_run.created_at,
+                    "steps": [
+                        {
+                            "id": step.id,
+                            "name": step.name,
+                            "status": (
+                                "generated"
+                                if step.status == "success"
+                                else (
+                                    "generating"
+                                    if step.status == "processing"
+                                    else (
+                                        "fail" if step.status == "failed" else "pending"
+                                    )
+                                )
+                            ),
+                            "started_at": step.start_at,
+                            "finished_at": step.finish_at,
+                            "error_message": step.error_message or None,
+                        }
+                        for step in steps
+                    ],
                 }
-                for step in steps
-            ],
-        }
 
     elif notification.novel:
         data["novel_info"] = {
