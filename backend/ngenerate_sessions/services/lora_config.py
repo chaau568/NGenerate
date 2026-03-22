@@ -19,7 +19,7 @@ LORA_CONFIGS = {
     },
     "chinese-modern": {
         "lora_name": "StariweiStyle.safetensors",
-        "lora_strength": 0.85,
+        "lora_strength": 1.0,
         "trigger_word": "stariwei_style",
         "style_tags": "stariwei_style, xianxia, chinese fantasy, sharp features, hanfu",
         "score_prefix": "score_9, score_8_up, score_7_up, source_anime",

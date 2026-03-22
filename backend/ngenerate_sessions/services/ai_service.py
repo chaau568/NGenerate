@@ -47,10 +47,12 @@ class AIService:
             positive_prompt=character_profile.positive_prompt,
             negative_prompt=character_profile.negative_prompt,
             output_path=output_path,
-            style=style
+            style=style,
         )
 
-    def generate_character_emotion(self, character, reference_image_path, output_path, style="ghibli"):
+    def generate_character_emotion(
+        self, character, reference_image_path, output_path, style="ghibli"
+    ):
 
         return self.image.generate_character_with_ref(
             positive_prompt=character.positive_prompt,
@@ -72,7 +74,7 @@ class AIService:
             width=1280,
             height=720,
             output_path=output_path,
-            style=style
+            style=style,
         )
 
     # ===============================
@@ -92,28 +94,46 @@ class AIService:
         return job_id
 
     def wait_for_video(self, job_id, timeout=7200):
-
         start = time.time()
+        consecutive_errors = 0
+        MAX_CONSECUTIVE_ERRORS = 5
 
         while True:
+            try:
+                res = requests.get(
+                    f"{self.BASE_URL}/video/status/{job_id}",
+                    timeout=60,
+                )
+                consecutive_errors = 0
+                res.raise_for_status()
+                data = res.json()
+                status = data.get("status")
 
-            res = requests.get(f"{self.BASE_URL}/video/status/{job_id}", timeout=10)
+                if status == "completed":
+                    return data["video_path"], data["duration"]
+                if status == "failed":
+                    raise Exception(data.get("error"))
 
-            data = res.json()
+            except requests.exceptions.ReadTimeout as e:
+                consecutive_errors += 1
+                logger.warning(
+                    f"Video status timeout ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS}) | job={job_id}"
+                )
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    raise Exception(
+                        f"Video status endpoint unresponsive after {MAX_CONSECUTIVE_ERRORS} retries"
+                    ) from e
 
-            status = data.get("status")
-
-            if status == "completed":
-
-                return data["video_path"], data["duration"]
-
-            if status == "failed":
-
-                raise Exception(data.get("error"))
+            except requests.exceptions.ConnectionError as e:
+                consecutive_errors += 1
+                logger.warning(
+                    f"Video status connection error ({consecutive_errors}/{MAX_CONSECUTIVE_ERRORS})"
+                )
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    raise
 
             if time.time() - start > timeout:
                 raise Exception("Video render timeout")
 
             logger.info("Waiting video render...")
-
             time.sleep(60)

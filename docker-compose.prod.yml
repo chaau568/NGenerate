@@ -1,0 +1,53 @@
+services:
+
+  db:
+    ports: []
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+  redis:
+    ports: []
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+
+  backend:
+    volumes:
+      - storage_data:/app/storage
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn ngenerate.wsgi:application
+             --bind 0.0.0.0:8000
+             --workers 4
+             --timeout 120"
+
+  celery_default:
+    volumes:
+      - storage_data:/app/storage
+
+  celery_generation:
+    volumes:
+      - storage_data:/app/storage
+
+  nginx:
+    image: nginx:alpine
+    container_name: ngenerate_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_files:/app/static
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  storage_data:
+  static_files:

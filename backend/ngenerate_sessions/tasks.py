@@ -52,10 +52,6 @@ def run_analysis_task(self, session_id):
 
 @shared_task(bind=True, queue="generation_queue")
 def run_generation_task(self, generation_run_id):
-    """
-    รับ generation_run_id แทน session_id
-    แต่ละครั้งที่ generate = GenerationRun ใหม่
-    """
 
     lock_key = f"generation_lock_{generation_run_id}"
 

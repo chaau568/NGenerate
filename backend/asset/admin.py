@@ -129,7 +129,8 @@ class VideoAdmin(FilePreviewMixin, admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("is_final", "session", "created_at")
-    readonly_fields = ("created_at", "file_preview", "file_size")
+
+    readonly_fields = ("created_at", "file_preview", "file_size", "version")
 
     fieldsets = (
         ("Status", {"fields": ("session", "version", "is_final")}),

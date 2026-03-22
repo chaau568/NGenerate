@@ -15,7 +15,7 @@ export async function serverFetch(
   const res = await fetch(`${baseUrl}${endpoint}`, {
     ...fetchOptions,
     headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(isFormData || !fetchOptions.body ? {} : { "Content-Type": "application/json" }),
       ...(fetchOptions.headers || {}),
     },
   });

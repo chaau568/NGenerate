@@ -31,4 +31,7 @@ urlpatterns = [
     # Sentence edit
     path("data/<int:session_id>/sentence/<int:sentence_id>/", views.update_sentence, name="update-sentence"),
     path("emotion-choices/", views.emotion_choices, name="emotion-choices"),
+    
+    # Character
+    path("character/<int:character_id>/", views.delete_character, name="delete-character"),
 ]

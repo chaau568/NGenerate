@@ -1,0 +1,10 @@
+.env
+.env.prod
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+storage/
+*.sqlite3
+node_modules/

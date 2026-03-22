@@ -1,6 +1,9 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import os
+from django.conf import settings
+
 from django.db import close_old_connections
 from django.conf import settings
 
@@ -364,7 +367,7 @@ class GenerationWorkflow:
         try:
             import os
 
-            full_path = f"/workspace/ngenerate/{video_file_path}"
+            full_path = f"{settings.STORAGE_ROOT}/{video_file_path}"
             if os.path.exists(full_path):
                 file_size = round(os.path.getsize(full_path) / (1024 * 1024), 2)  # MB
         except Exception:

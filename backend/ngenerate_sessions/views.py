@@ -9,7 +9,7 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
-from .models import Session, GenerationRun, Sentence
+from .models import Session, GenerationRun, Sentence, CharacterProfile
 from novels.models import Novel, Chapter
 from users.models import UserCredit
 from utils.file_url import build_file_url
@@ -19,6 +19,7 @@ from .tasks import run_analysis_task, run_generation_task
 from .services.convert import ConvertTextToJson
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -626,12 +627,14 @@ def retry_session(request, session_id):
         else:
             if session.status != "analyzed":
                 return Response(
-                    {"error": "Session must be in analyzed state"}, status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Session must be in analyzed state"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             if session.generation_runs.filter(status="generating").exists():
                 return Response(
-                    {"error": "Generation is already in progress"}, status=status.HTTP_400_BAD_REQUEST
+                    {"error": "Generation is already in progress"},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             failed_runs = session.generation_runs.filter(status="failed")
@@ -965,3 +968,23 @@ def update_sentence(request, session_id, sentence_id):
 def emotion_choices(request):
 
     return Response({"emotions": Sentence.get_emotion_choices()})
+
+
+# =====================================================
+# DELETE CHARACTER (LIBRARY)
+# =====================================================
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_character(request, character_id):
+
+    character = get_object_or_404(
+        CharacterProfile, id=character_id, novel__user=request.user
+    )
+
+    character.delete()
+
+    return Response(
+        {"message": "Character deleted successfully"}, status=status.HTTP_204_NO_CONTENT
+    )

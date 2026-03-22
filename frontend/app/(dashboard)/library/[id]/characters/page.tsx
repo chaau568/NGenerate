@@ -44,6 +44,24 @@ export default function CharacterListPage({
     return `${process.env.NEXT_PUBLIC_API_BASE_URL}${path}`;
   };
 
+  const handleDelete = async (characterId: number) => {
+    if (!confirm("Delete this character?")) return;
+
+    const res = await clientFetch(`/api/library/character/${characterId}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      setCharacters((prev) => prev.filter((c) => c.id !== characterId));
+
+      if (selected === characterId) {
+        setSelected(null);
+      }
+    } else {
+      alert("Failed to delete character");
+    }
+  };
+
   if (loading)
     return (
       <div className={styles.loadingState}>
@@ -168,6 +186,12 @@ export default function CharacterListPage({
                       <p className={styles.detailText}>{active.outfit}</p>
                     </div>
                   )}
+                  <button
+                    className={styles.deleteBtn}
+                    onClick={() => handleDelete(active.id)}
+                  >
+                    Delete Character
+                  </button>
                 </div>
               </>
             ) : (

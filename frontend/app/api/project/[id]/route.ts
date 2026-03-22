@@ -60,31 +60,43 @@ export async function GET(
 
     /* ================= WATCH ================= */
     if (watchVideoId) {
+        const rangeHeader = req.headers.get("range");
+
+        const fetchHeaders: Record<string, string> = {
+            Authorization: `Bearer ${accessToken}`,
+        };
+        if (rangeHeader) {
+            fetchHeaders["Range"] = rangeHeader;
+        }
+
         const { res } = await serverFetch(
             `/asset/videos/${watchVideoId}/watch/`,
             {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-                raw: true, // 👈 สำคัญ ถ้า serverFetch รองรับ
+                headers: fetchHeaders,
+                raw: true,
             }
         );
 
-        if (!res.ok) {
+        if (!res.ok && res.status !== 206) {
             return NextResponse.json(
                 { detail: "Watch failed" },
                 { status: res.status }
             );
         }
 
+        const responseHeaders: Record<string, string> = {
+            "Content-Type": res.headers.get("Content-Type") || "video/mp4",
+            "Accept-Ranges": "bytes",
+        };
+
+        const contentRange = res.headers.get("Content-Range");
+        const contentLength = res.headers.get("Content-Length");
+        if (contentRange) responseHeaders["Content-Range"] = contentRange;
+        if (contentLength) responseHeaders["Content-Length"] = contentLength;
+
         return new NextResponse(res.body, {
-            status: 200,
-            headers: {
-                "Content-Type":
-                    res.headers.get("Content-Type") || "video/mp4",
-                "Content-Disposition":
-                    res.headers.get("Content-Disposition") || "inline",
-            },
+            status: res.status,
+            headers: responseHeaders,
         });
     }
 

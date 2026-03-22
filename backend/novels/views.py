@@ -292,27 +292,22 @@ def create_chapter(request, novel_id):
     # ---------------- FILE ----------------
 
     if file_obj:
-
-        unique_name = f"{uuid.uuid4()}_{file_obj.name}"
-
-        file_path = os.path.join(TMP_DIR, unique_name)
-        file_path = os.path.abspath(file_path)
-
-        with open(file_path, "wb+") as f:
-            for chunk in file_obj.chunks():
-                f.write(chunk)
-
         notification = Notification.objects.create(
             user=request.user,
             novel=novel,
             task_type="upload",
             message=f"Processing file {file_obj.name}",
-            file_path=file_path,
         )
+
+        file_bytes = file_obj.read()
+        file_name = file_obj.name
+        content_type = file_obj.content_type
 
         process_uploaded_file_task.delay(
             novel.id,
-            file_path,
+            file_bytes,
+            file_name,
+            content_type,
             notification.id,
         )
 

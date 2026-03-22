@@ -12,6 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env")
 
+ENVIRONMENT = env("ENVIRONMENT", default="local")
+
 # -------------------------------------------------
 # SECURITY
 # -------------------------------------------------
@@ -23,6 +25,7 @@ ALLOWED_HOSTS = [
     "biometrically-towerless-yadiel.ngrok-free.dev",
     "127.0.0.1", 
     "localhost",
+    "backend",
 ]
 
 # -------------------------------------------------
@@ -107,11 +110,23 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # DATABASE (Neon PostgreSQL)
 # -------------------------------------------------
 
+# DATABASES = {
+#     "default": dj_database_url.config(
+#         default=env("DATABASE_URL"),
+#         conn_max_age=0,
+#         ssl_require=True,
+#     )
+# }
+
+# -------------------------------------------------
+# DATABASE (PostgreSQL Docker Local)
+# -------------------------------------------------
+
 DATABASES = {
     "default": dj_database_url.config(
         default=env("DATABASE_URL"),
-        conn_max_age=0,
-        ssl_require=True,
+        conn_max_age=600,
+        ssl_require=ENVIRONMENT == "production",
     )
 }
 
@@ -247,21 +262,24 @@ CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://localhost:
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
+POPPLER_PATH = env("POPPLER_PATH", default=None)
+
 # -------------------------------------------------
 # STORAGE CONFIG
 # -------------------------------------------------
-
-ENVIRONMENT = env("ENVIRONMENT", default="local")
 
 RUNPOD_STORAGE_ROOT = env("RUNPOD_STORAGE_ROOT", default="/workspace/ngenerate")
 LOCAL_STORAGE_ROOT = env("LOCAL_STORAGE_ROOT", default=str(BASE_DIR / "storage"))
 
 if ENVIRONMENT == "production":
     STORAGE_ROOT = RUNPOD_STORAGE_ROOT
+
+elif ENVIRONMENT == "docker":
+    STORAGE_ROOT = RUNPOD_STORAGE_ROOT
+
 else:
     STORAGE_ROOT = LOCAL_STORAGE_ROOT
-    
-POPPLER_PATH = env("POPPLER_PATH", default=None)
+
 
 # -------------------------------------------------
 # CORE STORAGE PATHS
@@ -271,46 +289,21 @@ ASSET_ROOT = os.path.join(STORAGE_ROOT, env("ASSET_ROOT", default="assets"))
 USER_DATA_ROOT = os.path.join(STORAGE_ROOT, env("USER_DATA_ROOT", default="user_data"))
 MODEL_ROOT = os.path.join(STORAGE_ROOT, env("MODEL_ROOT", default="models"))
 
-# -------------------------------------------------
-# ASSET PATH
-# -------------------------------------------------
-
-MASTER_VOICE_ROOT = os.path.join(
-    ASSET_ROOT,
-    env("MASTER_VOICE_DIR", default="master_voice")
-)
-
-DEFAULT_ASSET_ROOT = os.path.join(
-    ASSET_ROOT,
-    env("DEFAULT_ASSET_DIR", default="defaults")
-)
-
-# -------------------------------------------------
-# TMP PATH
-# -------------------------------------------------
+MASTER_VOICE_ROOT = os.path.join(ASSET_ROOT, env("MASTER_VOICE_DIR", default="master_voice"))
+DEFAULT_ASSET_ROOT = os.path.join(ASSET_ROOT, env("DEFAULT_ASSET_DIR", default="defaults"))
 
 TMP_ROOT = os.path.join(STORAGE_ROOT, "tmp")
 
+DEFAULT_NOVEL_COVER = os.path.join(DEFAULT_ASSET_ROOT, "default_cover.jpg")
+DEFAULT_AVATAR = os.path.join(DEFAULT_ASSET_ROOT, "default_avatar.jpg")
+
+if ENVIRONMENT == "local":
+    os.makedirs(STORAGE_ROOT, exist_ok=True)
+    os.makedirs(ASSET_ROOT, exist_ok=True)
+    os.makedirs(USER_DATA_ROOT, exist_ok=True)
+    os.makedirs(MODEL_ROOT, exist_ok=True)
+
 os.makedirs(TMP_ROOT, exist_ok=True)
-
-# -------------------------------------------------
-# DEFAULT ASSETS
-# -------------------------------------------------
-
-DEFAULT_NOVEL_COVER = os.path.join(
-    DEFAULT_ASSET_ROOT,
-    "default_cover.jpg"
-)
-
-DEFAULT_AVATAR = os.path.join(
-    DEFAULT_ASSET_ROOT,
-    "default_avatar.jpg"
-)
-
-os.makedirs(STORAGE_ROOT, exist_ok=True)
-os.makedirs(ASSET_ROOT, exist_ok=True)
-os.makedirs(USER_DATA_ROOT, exist_ok=True)
-os.makedirs(MODEL_ROOT, exist_ok=True)
 
 # -------------------------------------------------
 # MODEL PATH

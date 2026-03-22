@@ -24,8 +24,8 @@ class VoiceMapper:
 
         voice_type = session.narrator_voice or VoiceMapper.DEFAULT_VOICE
 
-        emotion = (sentence.emotion or "neutral").lower()
-        # emotion = "neutral"
+        # emotion = (sentence.emotion or "neutral").lower()
+        emotion = "neutral"
 
         # if emotion not in VoiceMapper.VALID_EMOTIONS:
         #     emotion = "neutral"

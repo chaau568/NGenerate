@@ -1,3 +1,4 @@
+from django.shortcuts import redirect
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -113,17 +114,6 @@ def delete_video(request, video_id):
     )
 
 
-# @api_view(["GET"])
-# @permission_classes([IsAuthenticated])
-# def watch_video(request, video_id):
-
-#     video = get_object_or_404(Video, id=video_id, session__novel__user=request.user)
-
-#     return Response({"url": build_file_url(video.video_path) if video.video_path else None})
-
-from django.shortcuts import redirect
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def watch_video(request, video_id):
@@ -133,7 +123,9 @@ def watch_video(request, video_id):
     if not video.video_path:
         return Response({"error": "Video not found"}, status=404)
 
-    return redirect(build_file_url(video.video_path))
+    video_url = build_file_url(video.video_path)
+
+    return redirect(video_url)
 
 
 @api_view(["GET"])
