@@ -174,67 +174,6 @@ export default function AnalyzeSummaryPage() {
         </div>
       </header>
 
-      {/* ── Session config ── */}
-      <div className={styles.configRow}>
-        {/* Name */}
-        <div className={styles.configBlock}>
-          <label className={styles.configLabel}>Session Title</label>
-          <div className={styles.nameRow}>
-            <input
-              value={sessionName}
-              onChange={(e) => {
-                setSessionName(e.target.value);
-                setNameChanged(e.target.value !== originalName);
-              }}
-              className={styles.nameInput}
-              placeholder="Enter session name…"
-            />
-            {nameChanged && (
-              <div className={styles.nameActions}>
-                <button
-                  className={styles.nameCancel}
-                  onClick={() => {
-                    setSessionName(originalName);
-                    setNameChanged(false);
-                  }}
-                  disabled={editMutation.isPending}
-                >
-                  <X size={14} />
-                </button>
-                <button
-                  className={styles.nameConfirm}
-                  onClick={() => editMutation.mutate({ name: sessionName })}
-                  disabled={editMutation.isPending}
-                >
-                  <Check size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Style */}
-        <div className={styles.configBlock}>
-          <label className={styles.configLabel}>
-            <Palette size={12} /> Visual Style
-          </label>
-          <div className={styles.styleGrid}>
-            {styleChoices.map((s) => (
-              <button
-                key={s.value}
-                className={`${styles.styleChip} ${style === s.value ? styles.styleChipActive : ""}`}
-                onClick={() => {
-                  setStyle(s.value);
-                  editMutation.mutate({ style: s.value });
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* ── Main card ── */}
       <div className={styles.card}>
         {/* LEFT — chapter list */}
@@ -350,6 +289,67 @@ export default function AnalyzeSummaryPage() {
               </>
             )}
           </button>
+        </div>
+      </div>
+
+      {/* ── Session config ── */}
+      <div className={styles.configRow}>
+        {/* Name */}
+        <div className={styles.configBlock}>
+          <label className={styles.configLabel}>Session Title</label>
+          <div className={styles.nameRow}>
+            <input
+              value={sessionName}
+              onChange={(e) => {
+                setSessionName(e.target.value);
+                setNameChanged(e.target.value !== originalName);
+              }}
+              className={styles.nameInput}
+              placeholder="Enter session name…"
+            />
+            {nameChanged && (
+              <div className={styles.nameActions}>
+                <button
+                  className={styles.nameCancel}
+                  onClick={() => {
+                    setSessionName(originalName);
+                    setNameChanged(false);
+                  }}
+                  disabled={editMutation.isPending}
+                >
+                  <X size={14} />
+                </button>
+                <button
+                  className={styles.nameConfirm}
+                  onClick={() => editMutation.mutate({ name: sessionName })}
+                  disabled={editMutation.isPending}
+                >
+                  <Check size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Style */}
+        <div className={styles.configBlock}>
+          <label className={styles.configLabel}>
+            <Palette size={12} /> Visual Style
+          </label>
+          <div className={styles.styleGrid}>
+            {styleChoices.map((s) => (
+              <button
+                key={s.value}
+                className={`${styles.styleChip} ${style === s.value ? styles.styleChipActive : ""}`}
+                onClick={() => {
+                  setStyle(s.value);
+                  editMutation.mutate({ style: s.value });
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

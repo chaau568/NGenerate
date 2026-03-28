@@ -173,3 +173,19 @@ class Chapter(models.Model):
 
         self.save()
         return self
+    
+    def fix_story_with_ai(self):
+        url = f"{settings.AI_API_URL}/fix-text/process-chapter"
+        payload = {"story": self.story}
+        
+        try:
+            resp = requests.post(url, json=payload, timeout=600)
+            resp.raise_for_status()
+            
+            fixed_data = resp.json()
+            self.story = fixed_data.get("fixed_story", self.story)
+            self.save(update_fields=["story", "updated_at"])
+            return True
+        except Exception as e:
+            print(f"Error in fix_story_with_ai: {e}")
+            return False

@@ -9,4 +9,5 @@ urlpatterns = [
     path("chapters/<int:chapter_id>/", views.chapter_detail, name="chapter_detail"), # view chapter detail
     path("<int:novel_id>/characters/", views.novel_characters, name="novel_characters"), # view character detail
     path("<int:novel_id>/retry-upload/<int:notification_id>/", views.retry_upload, name="retry_upload",),
+    path("<int:novel_id>/fix-chapters/", views.fix_chapters_batch, name="fix_chapters_batch"),
 ]

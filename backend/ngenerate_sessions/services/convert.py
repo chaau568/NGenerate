@@ -15,10 +15,8 @@ class ConvertTextToJson:
 
         text = text.strip()
 
-        # ลบ control chars
         text = re.sub(r"[\x00-\x1F\x7F]", "", text)
 
-        # ลบ symbol แปลก ๆ ที่ไม่ใช่ไทย/อังกฤษ/ตัวเลข/ช่องว่าง
         text = re.sub(r"[^\u0E00-\u0E7Fa-zA-Z0-9\s\.\,\!\?\-]", "", text)
 
         return text.strip()
@@ -34,8 +32,9 @@ class ConvertTextToJson:
 
         try:
             raw_sentences = sent_tokenize(text)
-        except Exception:
-            # fallback ถ้า sent_tokenize พัง
+            if len(raw_sentences) == 1:
+                raw_sentences = re.split(r"[\.!\?\n]", text)
+        except:
             raw_sentences = text.split("\n")
 
         clean_sentences = []
@@ -43,22 +42,19 @@ class ConvertTextToJson:
         for s in raw_sentences:
             s = s.strip()
 
-            # 🚫 skip empty
             if not s:
                 continue
 
-            # 🚫 skip ประโยคที่มีแต่ symbol
             if not re.search(r"[ก-๙a-zA-Z0-9]", s):
                 continue
 
-            words = s.split()
+            words = word_tokenize(s, engine="newmm")
+            # words = word_tokenize(s)
 
-            # ✅ ถ้าไม่เกิน limit
             if len(words) <= self.MAX_WORDS:
                 clean_sentences.append(s)
                 continue
 
-            # ✅ ถ้าเกิน → split เป็น chunk
             for i in range(0, len(words), self.MAX_WORDS):
                 chunk = " ".join(words[i : i + self.MAX_WORDS]).strip()
                 if chunk:
@@ -75,14 +71,12 @@ class ConvertTextToJson:
         if not text:
             return ""
 
-        # กันเคสมีแต่ symbol/วรรณยุกต์
         if not re.search(r"[ก-๙a-zA-Z0-9]", text):
             return text
 
         try:
             syllables = syllable_tokenize(text)
 
-            # 🔥 กัน list ว่าง (ต้นเหตุ crash)
             if not syllables:
                 return text
 
@@ -91,7 +85,6 @@ class ConvertTextToJson:
             return "-".join(cleaned) if cleaned else text
 
         except Exception:
-            # 🔥 fallback สำคัญมาก
             try:
                 words = word_tokenize(text)
                 return "-".join(words) if words else text
@@ -110,7 +103,7 @@ class ConvertTextToJson:
             try:
                 tts_text = self.to_syllable_text(s)
             except Exception:
-                tts_text = s  # fallback สุดท้าย
+                tts_text = s
 
             result.append(
                 {

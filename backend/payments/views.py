@@ -295,61 +295,76 @@ def my_credit_logs(request):
         "refund": "Refund",
     }
 
-    SESSION_STATUS_MAP = {
+    ANALYSIS_SESSION_STATUS_MAP = {
         "analyzing": "processing",
         "analyzed": "completed",
-        "generating": "processing",
-        "generated": "completed",
         "failed": "failed",
         "draft": "processing",
     }
 
+    def get_generation_status(session):
+        if session is None:
+            return "completed"
+        latest_run = session.generation_runs.order_by("-version").first()
+        if latest_run is None:
+            return "processing"
+        return {
+            "pending": "processing",
+            "generating": "processing",
+            "generated": "completed",
+            "failed": "failed",
+        }.get(latest_run.status, "processing")
+
     def map_status(log):
         t = log.type
-
         if t in ("analysis_complete", "generation_complete"):
             return "completed"
-
-        if t in ("analysis_lock", "generation_lock"):
+        if t == "analysis_lock":
             session = log.session
             if session is None:
                 return "completed"
-            return SESSION_STATUS_MAP.get(session.status, "processing")
-
-        if t == "refund":
+            return ANALYSIS_SESSION_STATUS_MAP.get(session.status, "processing")
+        if t == "generation_lock":
+            return get_generation_status(log.session)
+        if t in ("refund", "topup"):
             return "completed"
-
-        if t == "topup":
-            return "completed"
-
         return "unknown"
 
     def map_details(log):
         t = log.type
-
         if t == "topup":
             if log.transaction and log.transaction.package:
                 return log.transaction.package.name
             return "-"
-
         session_name = (
             (log.session.name if log.session else None) or log.session_name or "-"
         )
-
         if t == "refund":
             return f"{session_name} (refunded)"
-
         return session_name
 
-    data = [
-        {
-            "id": log.id,
-            "date_time": log.created_at,
-            "activate": ACTION_MAP.get(log.type, log.type),
-            "details": map_details(log),
-            "credits": log.amount,
-            "status": map_status(log),
-        }
-        for log in logs
-    ]
-    return Response(data, status=status.HTTP_200_OK)
+    COMPLETE_TYPES = {"analysis_complete", "generation_complete"}
+
+    complete_set: set[tuple] = set()
+    for log in logs:
+        if log.type in COMPLETE_TYPES:
+            session_id = log.session_id
+            complete_set.add((session_id, log.type))
+
+    result = []
+    for log in logs:
+        if log.type in COMPLETE_TYPES:
+            continue
+
+        result.append(
+            {
+                "id": log.id,
+                "date_time": log.created_at,
+                "activate": ACTION_MAP.get(log.type, log.type),
+                "details": map_details(log),
+                "credits": log.amount,
+                "status": map_status(log),
+            }
+        )
+
+    return Response(result, status=status.HTTP_200_OK)

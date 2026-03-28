@@ -91,9 +91,12 @@
 /* ── CONFIG ROW ── */
 .configRow {
   display: flex;
-  gap: 20px;
+  gap: 24px;
   flex-direction: column;
-  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .configBlock {
@@ -121,7 +124,9 @@
 }
 
 .nameInput {
-  min-width: 340px;
+  flex: 1;
+  min-width: unset;
+  max-width: 80%;
   padding: 10px 14px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);

@@ -62,6 +62,12 @@ export default function NovelDetailPage() {
   const editFileRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [isFixing, setIsFixing] = useState(false);
+  const [showFixSuccessModal, setShowFixSuccessModal] = useState(false);
+  const CHAPTER_UNIT = 10;
+  const costPerChapter = 0.25 / CHAPTER_UNIT;
+  const totalFixCost = Math.ceil(selectedChapters.length * costPerChapter);
+
   useEffect(() => {
     if (!id) return;
     clientFetch(`/api/library/${id}`).then(async (res) => {
@@ -126,6 +132,32 @@ export default function NovelDetailPage() {
       setShowFailedModal(true);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleFixText = async () => {
+    if (selectedChapters.length === 0) return;
+    setIsFixing(true);
+    try {
+      const res = await clientFetch(`/api/library/${id}/fix-chapters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapter_ids: selectedChapters,
+        }),
+      });
+
+      if (res.ok) {
+        setShowFixSuccessModal(true);
+        setSelectedChapters([]);
+      } else {
+        const data = await res.json();
+        alert(data.detail || "Failed to start fix text process");
+      }
+    } catch (err) {
+      alert("Something went wrong");
+    } finally {
+      setIsFixing(false);
     }
   };
 
@@ -385,6 +417,41 @@ export default function NovelDetailPage() {
             >
               {isCreating ? "Creating..." : "Analyze"}
             </button>
+
+            {/* <button
+              className={styles.outlineBtn}
+              style={{
+                width: "100%",
+                borderColor: "#6366f1",
+                color: "#6366f1",
+                display: "flex",
+                flexDirection: "column",
+                height: "auto",
+                padding: "10px",
+              }}
+              disabled={selectedChapters.length === 0 || isFixing}
+              onClick={handleFixText}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontWeight: "bold",
+                }}
+              >
+                <Pencil size={14} />
+                {isFixing ? "Fixing..." : "AI Fix Text (Beta)"}
+              </div>
+
+              {selectedChapters.length > 0 && (
+                <span
+                  style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}
+                >
+                  Requires {totalFixCost} Credits
+                </span>
+              )}
+            </button> */}
           </div>
         </aside>
       </div>
@@ -589,6 +656,16 @@ export default function NovelDetailPage() {
         onPrimary={() => setShowFailedModal(false)}
         onSecondary={() => setShowFailedModal(false)}
         onClose={() => setShowFailedModal(false)}
+      />
+
+      <SharePopUpAction
+        isOpen={showFixSuccessModal}
+        type="success"
+        title="Fixing Started!"
+        description="AI is correcting your text in the background. You will be notified when finished."
+        primaryText="OK"
+        onPrimary={() => setShowFixSuccessModal(false)}
+        onClose={() => setShowFixSuccessModal(false)}
       />
     </div>
   );

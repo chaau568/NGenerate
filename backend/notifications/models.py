@@ -9,6 +9,7 @@ class Notification(models.Model):
         ("analysis", "Analysis"),
         ("generation", "Generation"),
         ("upload", "Upload"),
+        ("fix_text", "Fix Text"),
     )
 
     STATUS_CHOICES = (
@@ -104,6 +105,11 @@ class Notification(models.Model):
 
     def get_effective_status(self):
         if self.task_type == "analysis" and self.session:
+            if self.session.status not in ("analyzed", "failed"):
+                return "processing"
+            if self.session.status == "failed":
+                return "error"
+
             steps = self.session.processing_steps.filter(phase="analysis")
             if not steps.exists():
                 return self.status
@@ -114,6 +120,11 @@ class Notification(models.Model):
             return "success"
 
         if self.task_type == "generation" and self.generation_run:
+            if self.generation_run.status not in ("generated", "failed"):
+                return "processing"
+            if self.generation_run.status == "failed":
+                return "error"
+
             steps = self.generation_run.processing_steps.all()
             if not steps.exists():
                 return self.status

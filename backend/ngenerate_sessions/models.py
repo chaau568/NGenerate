@@ -281,9 +281,11 @@ class Session(models.Model):
 
         steps_config = {
             "analysis": [
-                (1, "Analysis Sentence"),
-                (2, "Analysis Character"),
-                (3, "Analysis Scene"),
+                (1, "Split Sentences"),
+                (2, "Identify Characters"),
+                (3, "Segment Scenes"),
+                (4, "Analyze Sentence Details"),
+                (5, "Build Base Structure"),
             ],
         }
 
@@ -561,11 +563,10 @@ class GenerationRun(models.Model):
         self.processing_steps.all().delete()
 
         steps_config = [
-            (1, "Generating Character Master Image"),
-            (2, "Generating Character Emotion Image"),
-            (3, "Generating Scene Image"),
-            (4, "Generating Narrator Voice"),
-            (5, "Composite Video"),
+            (1, "Generating Character Master"),
+            (2, "Generating Scenes & Voices"),
+            (3, "Generating Character Emotions"),
+            (4, "Composing Final Video"),
         ]
 
         new_steps = []

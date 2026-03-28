@@ -72,12 +72,11 @@ def notification_detail(request, notification_id):
 
         if phase == "analysis":
             steps = session.processing_steps.filter(phase="analysis").order_by("order")
-
             total = steps.count()
             success_count = steps.filter(status="success").count()
             phase_progress = round((success_count / total) * 100) if total > 0 else 0
 
-            if session.is_analysis_done:
+            if session.status == "analyzed":
                 phase_progress = 100
 
             data["processing"] = {
@@ -106,10 +105,18 @@ def notification_detail(request, notification_id):
 
         elif phase == "generation":
             generation_run = notification.generation_run
-
             if generation_run:
                 steps = generation_run.processing_steps.all().order_by("order")
-                phase_progress = generation_run.get_progress_percentage()
+
+                if generation_run.status == "generating":
+                    total = steps.count()
+                    success_count = steps.filter(status="success").count()
+                    phase_progress = (
+                        round((success_count / total) * 100) if total > 0 else 0
+                    )
+                    phase_progress = min(phase_progress, 99)
+                else:
+                    phase_progress = generation_run.get_progress_percentage()
 
                 data["processing"] = {
                     "overall_progress": phase_progress,

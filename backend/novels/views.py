@@ -1,23 +1,23 @@
 import os
-import uuid
-
-from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
+
 
 from .models import Novel, Chapter
 from notifications.models import Notification
-from .tasks import process_uploaded_file_task
+from .tasks import process_uploaded_file_task, fix_chapters_batch_task
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
 from utils.file_url import build_file_url
+
+from django.db import models, transaction
+from payments.services.credit_service import CreditService
+from ngenerate_sessions.pricing import CreditPricing
 
 
 @extend_schema(
@@ -256,8 +256,6 @@ def novel_characters(request, novel_id):
 @permission_classes([IsAuthenticated])
 def create_chapter(request, novel_id):
 
-    TMP_DIR = settings.TMP_ROOT
-
     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
 
     story_text = request.data.get("story")
@@ -353,6 +351,7 @@ def chapter_detail(request, chapter_id):
         status=status.HTTP_200_OK,
     )
 
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def retry_upload(request, novel_id, notification_id):
@@ -404,3 +403,60 @@ def retry_upload(request, novel_id, notification_id):
         },
         status=status.HTTP_202_ACCEPTED,
     )
+
+
+import math
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def fix_chapters_batch(request, novel_id):
+    novel = get_object_or_404(Novel, id=novel_id, user=request.user)
+
+    chapter_ids = request.data.get("chapter_ids", [])
+    if not chapter_ids:
+        return Response(
+            {"detail": "No chapter IDs provided"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    num_chapters = len(chapter_ids)
+
+    cost_per_chapter = 2.5 / CreditPricing.CHAPTER_UNIT
+    total_cost = math.ceil(cost_per_chapter * num_chapters)
+
+    try:
+        with transaction.atomic():
+            CreditService.consume_credit(
+                user=request.user,
+                amount=total_cost,
+                description=f"AI Fix Text: {num_chapters} chapters (Novel: {novel.title})",
+            )
+
+            notification = Notification.objects.create(
+                user=request.user,
+                novel=novel,
+                task_type="fix_text",
+                status="processing",
+                message=f"กำลังเตรียมแก้ไข {num_chapters} ตอน...",
+            )
+
+            fix_chapters_batch_task.delay(chapter_ids, notification.id, total_cost)
+
+            return Response(
+                {
+                    "status": "processing",
+                    "notification_id": notification.id,
+                    "cost": total_cost,
+                    "message": "AI กำลังทำงานเบื้องหลัง",
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+    except ValueError:
+        return Response(
+            {"detail": "จำนวน Credits ไม่เพียงพอ"}, status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
