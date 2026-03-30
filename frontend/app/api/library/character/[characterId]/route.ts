@@ -3,11 +3,11 @@ import { cookies } from "next/headers";
 import { serverFetch } from "@/lib/server-api";
 
 type Context = {
-  params: { characterId: string };
+  params: Promise<{ characterId: string }>;
 };
 
 export async function DELETE(request: Request, context: Context) {
-  const { characterId } = context.params;
+  const { characterId } = await context.params;
 
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("access")?.value;
@@ -17,7 +17,7 @@ export async function DELETE(request: Request, context: Context) {
   }
 
   const { res } = await serverFetch(
-    `/character/${characterId}/`,
+    `/session/character/${characterId}/`,
     {
       method: "DELETE",
       headers: {
@@ -25,6 +25,10 @@ export async function DELETE(request: Request, context: Context) {
       },
     }
   );
+
+  if (res.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
 
   return NextResponse.json({}, { status: res.status });
 }

@@ -5,7 +5,6 @@ import os
 from django.conf import settings
 
 from django.db import close_old_connections
-from django.conf import settings
 
 from asset.models import (
     CharacterProfileAsset,
@@ -24,7 +23,7 @@ from ngenerate_sessions.models import (
     Sentence,
     Illustration,
     CharacterProfile,
-    Character,
+    SceneCharacter,
     GenerationRun,
 )
 
@@ -75,7 +74,6 @@ def _run_parallel(fn, items, max_workers: int, label: str):
 class GenerationWorkflow:
 
     def __init__(self, generation_run: GenerationRun):
-
         self.run = generation_run
         self.session = generation_run.session
         self.ai = AIService()
@@ -88,25 +86,25 @@ class GenerationWorkflow:
         logger.info(
             f"Start generation workflow | session={self.session.id} | run={self.run.id} | v{self.run.version}"
         )
-        
+
         wait_for_runpod_ready(required=["comfyui", "tts"])
 
         self.run.create_processing_steps()
 
         try:
             self._run_step(
-                "Generating Character Master Image",
+                "Generating Character Master",
                 self._generate_character_master,
             )
 
             self._run_parallel_phase_a()
 
             self._run_step(
-                "Generating Character Emotion Image",
-                self._generate_character_emotion,
+                "Generating Character Scenes",
+                self._generate_character_scene_image,
             )
 
-            self._run_step("Composite Video", self._compose_video)
+            self._run_step("Composing Final Video", self._compose_video)
 
         except Exception as e:
             logger.exception(
@@ -126,8 +124,9 @@ class GenerationWorkflow:
             )
 
     # ─────────────────────────────────────────────────────
-    # HELPER: step marker — ใช้ GenerationProcessingStep
+    # HELPER: step marker
     # ─────────────────────────────────────────────────────
+
     def _run_step(self, step_name: str, fn):
         step = self.run.processing_steps.get(name=step_name)
         step.mark_start()
@@ -143,12 +142,12 @@ class GenerationWorkflow:
     # ─────────────────────────────────────────────────────
     # Phase A-2: Scene + Voice พร้อมกัน
     # ─────────────────────────────────────────────────────
+
     def _run_parallel_phase_a(self):
-        scene_step = self.run.processing_steps.get(name="Generating Scene Image")
-        voice_step = self.run.processing_steps.get(name="Generating Narrator Voice")
+        scene_step = self.run.processing_steps.get(name="Generating Scenes & Voices")
+        voice_step = scene_step
 
         scene_step.mark_start()
-        voice_step.mark_start()
 
         scene_error = None
         voice_error = None
@@ -172,21 +171,24 @@ class GenerationWorkflow:
             raise scene_error
 
         if voice_error:
-            voice_step.mark_failed(str(voice_error))
+            scene_step.mark_failed(str(voice_error))
             self.run.update_notification_progress()
             raise voice_error
 
         scene_step.mark_success()
-        voice_step.mark_success()
         self.run.update_notification_progress()
 
     # =====================================================
-    # CHARACTER MASTER
+    # STEP 1: CHARACTER MASTER IMAGE
+    # ดึง CharacterProfile ทั้งหมดที่ปรากฏใน session นี้
+    # (ผ่าน SceneCharacter แทน Character เดิม)
     # =====================================================
 
     def _generate_character_master(self):
         profiles = list(
-            CharacterProfile.objects.filter(characters__session=self.session).distinct()
+            CharacterProfile.objects.filter(
+                scene_characters__session=self.session
+            ).distinct()
         )
 
         def _one(profile):
@@ -209,58 +211,62 @@ class GenerationWorkflow:
         _run_parallel(_one, profiles, MAX_IMAGE_WORKERS, "Master image")
 
     # =====================================================
-    # CHARACTER EMOTION IMAGE
+    # STEP 3: CHARACTER SCENE IMAGE
+    # แทน emotion image เดิม — generate รูปต่อ SceneCharacter
+    # (1 ตัวละคร × 1 ฉาก = 1 รูป)
     # =====================================================
 
-    def _generate_character_emotion(self):
-        characters = list(
-            Character.objects.filter(session=self.session).select_related(
+    def _generate_character_scene_image(self):
+        scene_characters = list(
+            SceneCharacter.objects.filter(session=self.session).select_related(
                 "character_profile__asset",
                 "illustration__chapter",
             )
         )
 
-        def _one(character):
-
+        def _one(sc: SceneCharacter):
             if CharacterAsset.objects.filter(
-                generation_run=self.run, character=character
+                generation_run=self.run, scene_character=sc
             ).exists():
                 return
 
-            master_asset = getattr(character.character_profile, "asset", None)
+            master_asset = getattr(sc.character_profile, "asset", None)
             if not master_asset:
                 raise Exception(
-                    f"Master image missing for profile: {character.character_profile.id}"
+                    f"Master image missing for profile: {sc.character_profile.id}"
                 )
-
 
             dummy = CharacterAsset(
                 generation_run=self.run,
                 session=self.session,
-                character=character,
+                scene_character=sc,
             )
-            output_path = character_asset_path(dummy, "emotion.png")
+            output_path = character_asset_path(dummy, "scene.png")
 
-            image_path = self.ai.generate_character_emotion(
-                character=character,
+            image_path = self.ai.generate_character_scene(
+                scene_character=sc,
                 reference_image_path=master_asset.image,
                 output_path=output_path,
                 style=self.run.style,
             )
+
             CharacterAsset.objects.create(
                 generation_run=self.run,
                 session=self.session,
-                character=character,
+                scene_character=sc,
                 image=image_path,
             )
             logger.info(
-                f"Emotion image saved | character={character.id} | {character.emotion}"
+                f"Scene character image saved | sc={sc.id} | "
+                f"{sc.character_profile.name} | {sc.action or sc.pose}"
             )
 
-        _run_parallel(_one, characters, MAX_IMAGE_WORKERS, "Emotion image")
+        _run_parallel(
+            _one, scene_characters, MAX_IMAGE_WORKERS, "Scene character image"
+        )
 
     # =====================================================
-    # SCENE IMAGE
+    # STEP 2a: SCENE IMAGE
     # =====================================================
 
     def _generate_scene(self):
@@ -295,7 +301,7 @@ class GenerationWorkflow:
         _run_parallel(_one, illustrations, MAX_IMAGE_WORKERS, "Scene image")
 
     # =====================================================
-    # VOICE
+    # STEP 2b: VOICE
     # =====================================================
 
     def _generate_voice(self):
@@ -313,7 +319,6 @@ class GenerationWorkflow:
 
             voice_type, emotion, config = VoiceMapper.map(
                 session=self.session,
-                sentence=sentence,
             )
             dummy = NarratorVoice(
                 generation_run=self.run,
@@ -343,11 +348,10 @@ class GenerationWorkflow:
         _run_parallel(_one, sentences, MAX_VOICE_WORKERS, "Voice")
 
     # =====================================================
-    # VIDEO COMPOSE
+    # STEP 4: VIDEO COMPOSE
     # =====================================================
 
     def _compose_video(self):
-
         if hasattr(self.run, "video"):
             logger.info(f"Video already exists for run v{self.run.version}, skipping")
             return
@@ -365,11 +369,9 @@ class GenerationWorkflow:
 
         file_size = 0.0
         try:
-            import os
-
             full_path = f"{settings.STORAGE_ROOT}/{video_file_path}"
             if os.path.exists(full_path):
-                file_size = round(os.path.getsize(full_path) / (1024 * 1024), 2)  # MB
+                file_size = round(os.path.getsize(full_path) / (1024 * 1024), 2)
         except Exception:
             pass
 

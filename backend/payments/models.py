@@ -46,12 +46,18 @@ class Transaction(models.Model):
     )
 
     payment_ref = models.CharField(max_length=255, null=True, blank=True)
-    omise_charge_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
+    omise_charge_id = models.CharField(
+        max_length=255, null=True, blank=True, unique=True
+    )
+
+    idempotency_key = models.CharField(
+        max_length=255, null=True, blank=True, unique=True
+    )
 
     amount = models.IntegerField()
 
     credit_amount = models.PositiveIntegerField()
-    
+
     expire_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -101,7 +107,7 @@ class CreditLog(models.Model):
         on_delete=models.SET_NULL,
         related_name="credit_logs",
     )
-    
+
     session_name = models.CharField(max_length=255, blank=True, null=True)
 
     type = models.CharField(max_length=30, choices=TYPE_CHOICES)

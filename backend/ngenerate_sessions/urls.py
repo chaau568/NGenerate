@@ -24,6 +24,7 @@ urlpatterns = [
     path("finished-tasks/", views.finished_tasks, name="finished-tasks"),
     path("detail/<int:session_id>/", views.view_detail, name="history-detail"),
     path("data/<int:session_id>/", views.session_data, name="session-data"), 
+    path("generation-run/<int:run_id>/delete/", views.delete_generation_run, name="delete-generation-run"),
     path("delete/<int:session_id>/", views.delete_session, name="delete-session"),
     path("project/", views.project_list, name="project-list"),
     path("project/<int:session_id>/", views.project_delete, name="project-delete"),

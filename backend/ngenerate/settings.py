@@ -74,6 +74,7 @@ INSTALLED_APPS = [
     "ngenerate_sessions",
     "asset",
     "notifications",
+    "admin_console",
 ]
 
 MIDDLEWARE = [
@@ -313,6 +314,8 @@ AI_API_URL = env("AI_API_URL", default="http://localhost:8000")
 AI_TIMEOUT = env.int("TIMEOUT", default=3600)
 
 BASE_FILE_URL=f"{AI_API_URL}/files"
+
+SITE_URL = env("SITE_URL", default="http://localhost:8000")
 
 
 # -------------------------------------------------

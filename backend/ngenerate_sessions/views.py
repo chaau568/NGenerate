@@ -12,6 +12,7 @@ from rest_framework import serializers
 from .models import Session, GenerationRun, Sentence, CharacterProfile
 from novels.models import Novel, Chapter
 from users.models import UserCredit
+from asset.models import CharacterAsset, NarratorVoice, IllustrationImage
 from utils.file_url import build_file_url
 from utils.runpod_storage import delete_runpod_folder
 
@@ -21,6 +22,8 @@ from .services.convert import ConvertTextToJson
 import logging
 
 logger = logging.getLogger(__name__)
+
+from collections import defaultdict
 
 
 # =====================================================
@@ -279,7 +282,7 @@ def summary_generate(request, session_id):
             "details": {"session_name": session.name},
             "summary": {
                 "sentence_count": session.sentences.count(),
-                "character_count": session.characters.count(),
+                "character_count": session.scene_characters.count(),
                 "scene_count": session.illustrations.count(),
                 "total_credit_required": required_credit,
                 "credits_remaining": wallet.available,
@@ -466,7 +469,6 @@ def finished_tasks(request):
                             "generation_finished_at": run.generation_finished_at,
                         }
                     )
-
                 elif run.status == "failed":
                     failed_history.append(
                         {
@@ -503,17 +505,69 @@ def finished_tasks(request):
 
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
+def delete_generation_run(request, run_id):
+    run = get_object_or_404(
+        GenerationRun,
+        id=run_id,
+        session__novel__user=request.user,
+    )
+
+    session = run.session
+
+    folder_path = (
+        f"user_data/user_{session.novel.user_id}"
+        f"/novel_{session.novel_id}"
+        f"/session_{session.id}"
+        f"/v{run.version}"
+    )
+    try:
+        delete_runpod_folder(folder_path)
+    except Exception as e:
+        logger.warning(f"Failed to delete RunPod folder: {e}")
+
+    if run.locked_credits > 0:
+        from payments.services.credit_service import CreditService
+
+        CreditService.refund_credit(
+            user=session.novel.user,
+            amount=run.locked_credits,
+            session=session,
+            session_name=session.name,
+        )
+
+    run.delete()
+
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_session(request, session_id):
-    session = get_object_or_404(Session, id=session_id, novel__user=request.user)
+    session = get_object_or_404(
+        Session,
+        id=session_id,
+        novel__user=request.user,
+    )
+
+    is_generating = session.generation_runs.filter(status="generating").exists()
+
+    if is_generating:
+        return Response(
+            {"error": "Session is currently generating. Please wait or cancel first."},
+            status=status.HTTP_409_CONFLICT,
+        )
 
     user_id = request.user.id
     novel_id = session.novel.id
     sid = session.id
 
     runpod_path = f"user_data/user_{user_id}/novel_{novel_id}/session_{sid}"
-    delete_runpod_folder(runpod_path)
-    session.delete()
+    try:
+        delete_runpod_folder(runpod_path)
+    except Exception as e:
+        logger.warning(f"Failed to delete RunPod folder for session {sid}: {e}")
 
+    session.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -607,7 +661,7 @@ def retry_session(request, session_id):
 
             session.processing_steps.all().delete()
             session.sentences.all().delete()
-            session.characters.all().delete()
+            session.scene_characters.all().delete()
             session.illustrations.all().delete()
 
             session.status = "draft"
@@ -714,7 +768,6 @@ def project_delete(request, session_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def session_data(request, session_id):
-    from utils.file_url import build_file_url
 
     session = get_object_or_404(
         Session.objects.select_related("novel"),
@@ -724,15 +777,21 @@ def session_data(request, session_id):
 
     if not session.is_analysis_done:
         return Response(
-            {"error": "Analysis not completed"}, status=status.HTTP_400_BAD_REQUEST
+            {"error": "Analysis not completed"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # ใช้ run_id query param เพื่อเลือก version ที่ต้องการ
-    # ถ้าไม่ระบุ ใช้ latest generated run
+    # =====================
+    # GENERATION RUN
+    # =====================
     run_id = request.query_params.get("run_id")
+
     if run_id:
         generation_run = get_object_or_404(
-            GenerationRun, id=run_id, session=session, status="generated"
+            GenerationRun,
+            id=run_id,
+            session=session,
+            status="generated",
         )
     else:
         generation_run = (
@@ -744,133 +803,139 @@ def session_data(request, session_id):
     is_generated = generation_run is not None
 
     # =====================
-    # CHARACTERS
+    # VOICE MAP  →  { sentence_id: url }
     # =====================
-    characters_qs = (
-        session.characters.select_related(
-            "character_profile",
-            "character_profile__asset",
-            "illustration",
-            "illustration__chapter",
-        )
-        .prefetch_related("assets")
-        .order_by("character_profile__name", "emotion")
+    voice_map = {}
+
+    if is_generated:
+        # ✅ filter ด้วย sentence_id__in เพื่อความแน่ใจ
+        sentence_ids = list(session.sentences.values_list("id", flat=True))
+        voice_assets = NarratorVoice.objects.filter(
+            generation_run=generation_run,
+            sentence_id__in=sentence_ids,
+        ).values("sentence_id", "voice")
+
+        for v in voice_assets:
+            voice_map[v["sentence_id"]] = build_file_url(v["voice"])
+
+    # =====================
+    # SENTENCES MAP  →  { chapter_order: [sentence, ...] }
+    # =====================
+    sentences_qs = session.sentences.select_related("chapter").order_by(
+        "chapter__order", "sentence_index"
     )
 
-    profile_map = {}
-    for char in characters_qs:
-        profile = char.character_profile
-        pid = profile.id
+    sentences_map = defaultdict(list)
 
-        if pid not in profile_map:
-            master_image = None
-            if is_generated and hasattr(profile, "asset") and profile.asset.image:
-                master_image = build_file_url(profile.asset.image)
-
-            profile_map[pid] = {
-                "profile_id": pid,
-                "name": profile.name,
-                "appearance": profile.appearance,
-                "sex": profile.sex,
-                "age": profile.age,
-                "master_image": master_image,
-                "emotions": [],
-            }
-
-        emotion_image = None
-        if is_generated:
-            # กรอง asset ตาม generation_run จาก prefetched "assets"
-            matching_asset = next(
-                (
-                    a
-                    for a in char.assets.all()
-                    if a.generation_run_id == generation_run.id
-                ),
-                None,
-            )
-            if matching_asset and matching_asset.image:
-                emotion_image = build_file_url(matching_asset.image)
-
-        profile_map[pid]["emotions"].append(
-            {
-                "character_id": char.id,
-                "emotion": char.emotion,
-                "image": emotion_image,
-            }
-        )
-
-    # =====================
-    # SENTENCES
-    # =====================
-    sentences_qs = (
-        session.sentences.select_related("chapter")
-        .prefetch_related("voice_assets")
-        .order_by("chapter__order", "sentence_index")
-    )
-
-    sentences_data = []
     for sent in sentences_qs:
-        voice_url = None
-        if is_generated:
-            voice = next(
-                (
-                    v
-                    for v in sent.voice_assets.all()
-                    if v.generation_run_id == generation_run.id
-                ),
-                None,
-            )
-            if voice:
-                voice_url = build_file_url(voice.voice)
-
-        sentences_data.append(
+        sentences_map[sent.chapter.order].append(
             {
                 "id": sent.id,
-                "chapter_order": sent.chapter.order,
                 "sentence_index": sent.sentence_index,
                 "sentence": sent.sentence,
                 "tts_text": sent.tts_text,
-                "emotion": sent.emotion,
-                "voice": voice_url,
+                "voice": voice_map.get(sent.id),
             }
         )
+
+    # =====================
+    # CHARACTER IMAGE MAP  →  { (illustration_id, profile_id): url }
+    # ✅ ใช้ composite key เพื่อไม่ให้ overwrite กัน
+    # =====================
+    character_image_map = {}
+
+    if is_generated:
+        character_assets = (
+            CharacterAsset.objects.filter(
+                generation_run=generation_run,
+                scene_character__session=session,
+            )
+            .select_related("scene_character")
+            .values(
+                "scene_character__illustration_id",
+                "scene_character__character_profile_id",
+                "image",
+            )
+        )
+
+        for asset in character_assets:
+            key = (
+                asset["scene_character__illustration_id"],
+                asset["scene_character__character_profile_id"],
+            )
+            character_image_map[key] = build_file_url(asset["image"])
+
+    # =====================
+    # SCENE IMAGE MAP  →  { illustration_id: url }
+    # =====================
+    scene_image_map = {}
+
+    if is_generated:
+
+        scene_assets = IllustrationImage.objects.filter(
+            generation_run=generation_run,
+            illustration__session=session,
+        ).values("illustration_id", "image")
+
+        for sa in scene_assets:
+            scene_image_map[sa["illustration_id"]] = build_file_url(sa["image"])
 
     # =====================
     # SCENES
     # =====================
     scenes_qs = (
         session.illustrations.select_related("chapter")
-        .prefetch_related("image_assets")
+        .prefetch_related("scene_characters__character_profile")
         .order_by("chapter__order", "scene_index")
     )
 
     scenes_data = []
+
     for scene in scenes_qs:
-        scene_image = None
-        if is_generated:
-            img = next(
-                (
-                    i
-                    for i in scene.image_assets.all()
-                    if i.generation_run_id == generation_run.id
-                ),
-                None,
+        # -------- scene image --------
+        scene_image = scene_image_map.get(scene.id)
+
+        # -------- characters --------
+        scene_characters = []
+        for sc in scene.scene_characters.all():
+            key = (scene.id, sc.character_profile_id)
+            scene_characters.append(
+                {
+                    "id": sc.character_profile.id,
+                    "name": sc.character_profile.name,
+                    "action": sc.action,
+                    "expression": sc.expression,
+                    "image": character_image_map.get(key),  # ✅ composite key
+                }
             )
-            if img:
-                scene_image = build_file_url(img.image)
+
+        # -------- sentences --------
+        chapter_sentences = sentences_map.get(scene.chapter.order, [])
+
+        if scene.sentence_start is None or scene.sentence_end is None:
+            scene_sentences = []
+        else:
+            scene_sentences = [
+                s
+                for s in chapter_sentences
+                if scene.sentence_start <= s["sentence_index"] <= scene.sentence_end
+            ]
 
         scenes_data.append(
             {
                 "id": scene.id,
                 "chapter_order": scene.chapter.order,
                 "scene_index": scene.scene_index,
-                "sentence_start": scene.sentence_start,
-                "sentence_end": scene.sentence_end,
                 "description": scene.scene_description,
                 "image": scene_image,
+                "characters": scene_characters,
+                "sentences": scene_sentences,
             }
         )
 
+    # =====================
+    # RESPONSE
+    # =====================
     return Response(
         {
             "session_id": session.id,
@@ -899,8 +964,6 @@ def session_data(request, session_id):
                 }
                 for r in session.generation_runs.order_by("-version")
             ],
-            "characters": list(profile_map.values()),
-            "sentences": sentences_data,
             "scenes": scenes_data,
         }
     )
@@ -920,7 +983,7 @@ def update_sentence(request, session_id, sentence_id):
 
     sentence = get_object_or_404(Sentence, id=sentence_id, session=session)
 
-    allowed_fields = {"sentence", "tts_text", "emotion"}
+    allowed_fields = {"sentence", "tts_text"}
     update_data = {k: v for k, v in request.data.items() if k in allowed_fields}
 
     if not update_data:
@@ -928,14 +991,6 @@ def update_sentence(request, session_id, sentence_id):
             {"error": "No valid fields to update"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-
-    if "emotion" in update_data:
-        valid_emotions = Sentence.get_emotion_choices()
-        if update_data["emotion"] not in valid_emotions:
-            return Response(
-                {"error": f"Invalid emotion. Choices: {valid_emotions}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
     if "sentence" in update_data:
         if not update_data["sentence"].strip():
@@ -957,7 +1012,6 @@ def update_sentence(request, session_id, sentence_id):
             "id": sentence.id,
             "sentence": sentence.sentence,
             "tts_text": sentence.tts_text,
-            "emotion": sentence.emotion,
         },
         status=status.HTTP_200_OK,
     )
@@ -967,7 +1021,7 @@ def update_sentence(request, session_id, sentence_id):
 @permission_classes([IsAuthenticated])
 def emotion_choices(request):
 
-    return Response({"emotions": Sentence.get_emotion_choices()})
+    return Response({"emotions": []})
 
 
 # =====================================================

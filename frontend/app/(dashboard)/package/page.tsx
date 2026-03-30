@@ -29,6 +29,30 @@ export default function PackageListPage() {
       });
   }, []);
 
+  const handleBuy = async (pkgId: number) => {
+    try {
+      const key = crypto.randomUUID();
+
+      const res = await clientFetch("/api/package", {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": key,
+        },
+        body: JSON.stringify({ package_id: pkgId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed");
+      }
+
+      router.push(`/package/${data.transaction_id}`);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (loading)
     return (
       <div className={styles.loadingState}>
@@ -87,7 +111,7 @@ export default function PackageListPage() {
 
               <button
                 className={`${styles.buyBtn} ${isFeatured ? styles.buyBtnFeatured : ""}`}
-                onClick={() => router.push(`/package/${pkg.id}`)}
+                onClick={() => handleBuy(pkg.id)}
               >
                 Get Started
               </button>

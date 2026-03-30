@@ -177,11 +177,32 @@ def create_payment(request):
         return Response({"detail": "Package not found"}, status=404)
 
     try:
+        key = request.headers.get("Idempotency-Key")
+
+        if key:
+            existing = Transaction.objects.filter(idempotency_key=key).first()
+            if existing:
+                return Response(
+                    {
+                        "transaction_id": existing.id,
+                        "ref": existing.payment_ref,
+                        "amount": existing.amount,
+                        "package_name": existing.package.name,
+                        "expire_at": existing.expire_at,
+                        "expire_in_minutes": 15,
+                    },
+                    status=200,
+                )
+
         tx = PaymentService.create_transaction(request.user, package)
+
+        if key:
+            tx.idempotency_key = key
+            tx.save(update_fields=["idempotency_key"])
     except ValidationError as e:
         return Response(
             {"detail": e.detail[0] if isinstance(e.detail, list) else e.detail},
-            status=400,
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     qr_data = PaymentService.generate_qr_for_transaction(tx.id)
@@ -201,6 +222,47 @@ def create_payment(request):
         },
         status=status.HTTP_201_CREATED,
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_payment(request, transaction_id):
+    tx = get_object_or_404(Transaction, id=transaction_id, user=request.user)
+
+    qr_data = PaymentService.generate_qr_for_transaction(tx.id)
+
+    return Response(
+        {
+            "transaction_id": tx.id,
+            "ref": tx.payment_ref,
+            "qr": qr_data["qr"],
+            "amount": tx.amount,
+            "package_name": tx.package.name,
+            "expire_at": tx.expire_at,
+            "expire_in_minutes": 15,
+        }
+    )
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAdminUser])
+def update_package(request, package_id):
+    """Admin: แก้ไข package (partial update)"""
+    package = get_object_or_404(Package, id=package_id)
+    serializer = PackageSerializer(package, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAdminUser])
+def delete_package(request, package_id):
+    """Admin: ลบ package"""
+    package = get_object_or_404(Package, id=package_id)
+    package.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])

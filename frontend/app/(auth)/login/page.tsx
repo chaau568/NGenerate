@@ -50,7 +50,11 @@ export default function LoginPage() {
       });
       const result = await res.json();
       if (!res.ok) throw result;
-      router.push("/library");
+      if (result.role === "admin") {
+        router.push("/main-dashboard");
+      } else {
+        router.push("/library");
+      }
     } catch (error: any) {
       setError("email", {
         message: error.error || "Invalid email or password",
@@ -118,7 +122,11 @@ export default function LoginPage() {
         return;
       }
       sessionStorage.removeItem("otp_email");
-      router.push("/library");
+      if (result.role === "admin") {
+        router.push("/main-dashboard");
+      } else {
+        router.push("/library");
+      }
     } catch {
       setOtpError("Something went wrong. Please try again.");
     } finally {

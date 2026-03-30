@@ -7,7 +7,7 @@ from ngenerate_sessions.models import (
     CharacterProfile,
     Sentence,
     Illustration,
-    Character,
+    SceneCharacter,
 )
 
 from utils.runpod_storage import delete_runpod_file
@@ -19,7 +19,6 @@ from utils.runpod_storage import delete_runpod_file
 
 
 def session_storage_path(session, folder, filename):
-    """ใช้สำหรับ CharacterProfileAsset เท่านั้น (ไม่ขึ้นกับ run)"""
     user_id = session.novel.user_id
     novel_id = session.novel_id
     session_id = session.id
@@ -36,10 +35,6 @@ def session_storage_path(session, folder, filename):
 
 
 def generation_run_storage_path(generation_run, folder, filename):
-    """
-    แยก path ตาม version เพื่อให้แต่ละ GenerationRun มี assets ของตัวเอง
-    รูปแบบ: user_data/user_{id}/novel_{id}/session_{id}/v{version}/{folder}/{filename}
-    """
     session = generation_run.session
     user_id = session.novel.user_id
     novel_id = session.novel_id
@@ -60,7 +55,6 @@ def generation_run_storage_path(generation_run, folder, filename):
 
 # =====================================================
 # CHARACTER PROFILE ASSET (MASTER IMAGE)
-# path ไม่ขึ้นกับ run เพราะ master image ใช้ร่วมกัน
 # =====================================================
 
 
@@ -110,30 +104,29 @@ class CharacterProfileAsset(models.Model):
 
 
 # =====================================================
-# CHARACTER EMOTION IMAGE
-# แต่ละ GenerationRun มี emotion image ของตัวเอง
+# CHARACTER SCENE ASSET
+# แทน CharacterAsset เดิมที่ผูกกับ Character (emotion-based)
+# ตอนนี้ผูกกับ SceneCharacter (scene-based)
 # =====================================================
 
 
 def character_asset_path(instance, filename):
     """
-    instance ต้องมี .generation_run และ .character
-    path: .../session_X/v{version}/character_emotions/ch{N}_s{N}_p{N}_{emotion}.png
+    path: .../session_X/v{version}/character_scenes/ch{N}_s{N}_p{N}.png
     """
-    character = instance.character
-    chapter_order = character.illustration.chapter.order
-    scene_index = character.illustration.scene_index
-    emotion = character.emotion or "neutral"
-    profile_id = character.character_profile_id
+    sc = instance.scene_character
+    chapter_order = sc.illustration.chapter.order
+    scene_index = sc.illustration.scene_index
+    profile_id = sc.character_profile_id
     ext = os.path.splitext(filename)[1] or ".png"
-    fname = f"ch{chapter_order}_s{scene_index}_p{profile_id}_{emotion}{ext}"
+    fname = f"ch{chapter_order}_s{scene_index}_p{profile_id}{ext}"
     return generation_run_storage_path(
-        instance.generation_run, "character_emotions", fname
+        instance.generation_run, "character_scenes", fname
     )
 
 
 class CharacterAsset(models.Model):
-    """Emotion image ของ character — แยกตาม GenerationRun"""
+    """Scene character image — แยกตาม GenerationRun, ผูกกับ SceneCharacter"""
 
     generation_run = models.ForeignKey(
         GenerationRun,
@@ -147,10 +140,11 @@ class CharacterAsset(models.Model):
         on_delete=models.CASCADE,
         related_name="character_assets",
     )
-
-    character = models.ForeignKey(
-        Character,
+    scene_character = models.ForeignKey(
+        SceneCharacter,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="assets",
     )
     image = models.CharField(max_length=500, blank=True, null=True)
@@ -159,15 +153,20 @@ class CharacterAsset(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["generation_run", "character"],
+                fields=["generation_run", "scene_character"],
                 condition=models.Q(generation_run__isnull=False),
                 name="unique_character_asset_per_run",
             )
         ]
 
     def __str__(self):
+        sc = self.scene_character
         version = f" v{self.generation_run.version}" if self.generation_run else ""
-        return f"{self.character.character_profile.name} ({self.character.emotion}){version}"
+        return (
+            f"{sc.character_profile.name} | "
+            f"Ch{sc.illustration.chapter.order} "
+            f"Scene{sc.illustration.scene_index}{version}"
+        )
 
     def delete(self, *args, **kwargs):
         if self.image:
@@ -180,14 +179,10 @@ class CharacterAsset(models.Model):
 
 # =====================================================
 # NARRATOR VOICE
-# แต่ละ GenerationRun มี voice ของตัวเอง
 # =====================================================
 
 
 def narrator_voice_path(instance, filename):
-    """
-    path: .../session_X/v{version}/voices/sent_{index}.wav
-    """
     sentence_index = instance.sentence.sentence_index
     ext = filename.split(".")[-1] if "." in filename else "wav"
     fname = f"sent_{sentence_index}.{ext}"
@@ -195,7 +190,6 @@ def narrator_voice_path(instance, filename):
 
 
 class NarratorVoice(models.Model):
-    """Voice asset — แยกตาม GenerationRun"""
 
     generation_run = models.ForeignKey(
         GenerationRun,
@@ -209,7 +203,6 @@ class NarratorVoice(models.Model):
         on_delete=models.CASCADE,
         related_name="voices",
     )
-
     sentence = models.ForeignKey(
         Sentence,
         on_delete=models.CASCADE,
@@ -243,14 +236,10 @@ class NarratorVoice(models.Model):
 
 # =====================================================
 # ILLUSTRATION IMAGE (SCENE)
-# แต่ละ GenerationRun มี scene image ของตัวเอง
 # =====================================================
 
 
 def illustration_image_path(instance, filename):
-    """
-    path: .../session_X/v{version}/scenes/scene_ch{N}_s{N}.png
-    """
     chapter_order = instance.illustration.chapter.order
     scene_index = instance.illustration.scene_index
     ext = filename.split(".")[-1] if "." in filename else "png"
@@ -259,7 +248,6 @@ def illustration_image_path(instance, filename):
 
 
 class IllustrationImage(models.Model):
-    """Scene image — แยกตาม GenerationRun"""
 
     generation_run = models.ForeignKey(
         GenerationRun,
@@ -273,7 +261,6 @@ class IllustrationImage(models.Model):
         on_delete=models.CASCADE,
         related_name="scene_images",
     )
-
     illustration = models.ForeignKey(
         Illustration,
         on_delete=models.CASCADE,
@@ -306,14 +293,10 @@ class IllustrationImage(models.Model):
 
 # =====================================================
 # VIDEO
-# 1 GenerationRun = 1 Video (OneToOne)
 # =====================================================
 
 
 def video_path(instance, filename):
-    """
-    path: .../session_X/v{version}/videos/video_v{version}.mp4
-    """
     fname = f"video_v{instance.generation_run.version}.mp4"
     return generation_run_storage_path(instance.generation_run, "videos", fname)
 

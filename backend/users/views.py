@@ -76,7 +76,12 @@ def register_verify_otp(request):
 
     refresh = RefreshToken.for_user(user)
     return Response(
-        {"access": str(refresh.access_token), "refresh": str(refresh)}, status=201
+        {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+        },
+        status=status.HTTP_201_CREATED,
     )
 
 
@@ -97,7 +102,11 @@ def register(request):
 
     refresh = RefreshToken.for_user(user)
     return Response(
-        {"access": str(refresh.access_token), "refresh": str(refresh)},
+        {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+        },
         status=status.HTTP_201_CREATED,
     )
 
@@ -133,7 +142,11 @@ def normal_login(request):
 
     refresh = RefreshToken.for_user(user)
     return Response(
-        {"access": str(refresh.access_token), "refresh": str(refresh)},
+        {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+        },
         status=status.HTTP_200_OK,
     )
 
@@ -258,7 +271,11 @@ def google_login_verify_otp(request):
 
     refresh = RefreshToken.for_user(user)
     return Response(
-        {"access": str(refresh.access_token), "refresh": str(refresh)},
+        {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "role": user.role,
+        },
         status=status.HTTP_200_OK,
     )
 

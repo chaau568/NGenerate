@@ -10,9 +10,7 @@ class GenerateCharacterPrompt:
         self.ai_api_url = ai_api_url
         self.timeout = timeout
 
-        # framing tags — ไม่เปลี่ยนตาม style
         self.__FRAMING_TAGS = (
-            "upper body, bust shot, "
             "full head visible, head fully in frame, "
             "portrait, solo, "
             "looking at viewer, facing viewer, front view, "
@@ -21,8 +19,6 @@ class GenerateCharacterPrompt:
 
         self.__FIXED_SUFFIX = "white background, simple background, isolated"
 
-        # negative — ไม่มี score_6/5/4 เพราะจะ hardcode ไม่ได้
-        # score negative ต้องอยู่ใน lora_config เหมือนกัน
         self.__FIXED_NEGATIVE_BASE = (
             "(low quality, worst quality:1.4), "
             "bad anatomy, bad hands, extra fingers, missing fingers, "
@@ -32,18 +28,8 @@ class GenerateCharacterPrompt:
             "background scenery, landscape, city, forest, "
             "(cropped head:1.5), (head cut off:1.5), (head out of frame:1.5), "
             "(missing head:1.5), partial head, cut forehead, "
-            "close-up face only, headshot without shoulders, "
-            "legs, feet, toes, boots, full body, "
-            "cowboy shot"
+            "close-up face only, headshot without shoulders"
         )
-
-        self.EMOTION_TAGS = {
-            "happy": "smiling, bright eyes, cheerful expression",
-            "sad": "sad expression, teary eyes, downcast look",
-            "angry": "angry expression, furrowed brows, intense eyes",
-            "serious": "serious expression, focused gaze, determined look",
-            "neutral": "neutral expression, calm face",
-        }
 
     # --------------------------------------------------
     # HELPERS
@@ -93,34 +79,54 @@ class GenerateCharacterPrompt:
         return "1woman" if sex == "woman" else "1man"
 
     def _build_prompt_prefix(self, style: str) -> str:
-        """
-        สร้าง prefix รวม:
-          score/quality tags (ต่างกันตาม base model)
-          + style tags
-          + trigger word (ถ้ามี)
-          + framing tags (คงที่)
-        """
         config = get_lora_config(style)
         parts = [
-            config["score_prefix"],  # "score_9,..." หรือ "best quality,..."
-            config["style_tags"],  # style-specific tags
+            config["score_prefix"],
+            config["style_tags"],
         ]
         if config["trigger_word"]:
-            parts.append(config["trigger_word"])  # "stariwei_style" / "guofeng"
-        parts.append(self.__FRAMING_TAGS)  # framing คงที่
+            parts.append(config["trigger_word"])
+        parts.append(self.__FRAMING_TAGS)
         return ", ".join(p for p in parts if p)
 
     def _build_negative(self, style: str) -> str:
-        """
-        รวม negative base + score negative จาก config
-        Pony ต้องการ score_6, score_5, score_4
-        SDXL base ไม่ต้องการ
-        """
         config = get_lora_config(style)
         score_neg = config.get("score_negative", "")
         if score_neg:
             return f"{score_neg}, {self.__FIXED_NEGATIVE_BASE}"
         return self.__FIXED_NEGATIVE_BASE
+
+    def _build_expression_tags(self, sc) -> tuple[str, str]:
+        """
+        แยก expression_tags เป็น 2 ส่วน:
+            action_tags  — การกระทำ + pose (ใส่ weight สูง)
+            emotion_tags — สีหน้า/อารมณ์
+
+        คืน (action_tags, emotion_tags) แยกกัน
+        เพื่อให้ generate_scene_prompt นำไปใช้ได้ถูกตำแหน่ง
+        """
+        action_parts = []
+        emotion_parts = []
+
+        action = sc.get("action", "").strip()
+        pose = sc.get("pose", "standing").strip()
+
+        if action and action.lower() not in ["", "none"]:
+            action_parts.append(f"(({action}, {pose}):1.4)")
+        elif pose:
+            action_parts.append(f"({pose}:1.2)")
+
+        if len(action_parts) > 0:
+            action_parts.append("dynamic pose, full body shot")
+
+        # ── Expression ──
+        expr = sc.get("expression", "neutral").strip()
+        if expr.lower() not in ("", "none", "neutral"):
+            emotion_parts.append(f"{expr} expression")
+
+        action_tags = ", ".join(action_parts) if action_parts else "standing"
+        emotion_tags = ", ".join(emotion_parts) if emotion_parts else ""
+        return action_tags, emotion_tags
 
     # --------------------------------------------------
     # METHOD 1: APPEARANCE ANCHOR
@@ -198,6 +204,23 @@ class GenerateCharacterPrompt:
 
     # --------------------------------------------------
     # METHOD 2: SCENE-AWARE PROMPT
+    #
+    # แก้ปัญหา: ท่าทาง/อาวุธไม่ติด prompt
+    #
+    # สาเหตุเดิม:
+    #   - LLM ถูกขอแค่ "outfit_tags" โดยรับ expression_tags เป็น context
+    #     แต่ prompt ไม่ได้บังคับให้รวมอาวุธ/สิ่งที่ถือไว้ใน tags
+    #   - action_tags ถูก append ท้ายสุดหลัง outfit_tags แต่ถ้า LLM
+    #     generate outfit ไม่มีอาวุธ → ภาพก็ไม่มีอาวุธ
+    #   - _build_expression_tags คืน string เดียวรวม pose+action+expression
+    #     ทำให้ weight ของแต่ละส่วนไม่ชัดเจน
+    #
+    # วิธีแก้:
+    #   1. แยก action_tags และ emotion_tags ออกจากกัน
+    #   2. ส่ง action โดยตรงให้ LLM generate "outfit_and_weapon_tags"
+    #      พร้อมบังคับให้ถ้ามี action ที่ใช้อาวุธ ต้องรวม weapon description
+    #   3. เรียง final prompt ให้ action_tags อยู่หลัง outfit ทันที
+    #      (SD อ่าน token ซ้าย→ขวา น้ำหนักลดลงตามลำดับ)
     # --------------------------------------------------
 
     def generate_scene_prompt(
@@ -206,34 +229,75 @@ class GenerateCharacterPrompt:
         identity: str,
         scene_description: str,
         character_name: str,
-        emotion: str,
+        scene_character,
         style: str,
     ) -> dict:
-        emotion_tags = self.EMOTION_TAGS.get(emotion, self.EMOTION_TAGS["neutral"])
+        action_tags, emotion_tags = self._build_expression_tags(scene_character)
         prefix = self._build_prompt_prefix(style)
         negative = self._build_negative(style)
+
+        action_raw = scene_character.get("action", "").strip()
+        pose_raw = scene_character.get("pose", "standing").strip()
+        expr_raw = scene_character.get("expression", "neutral").strip()
+
+        # ─── บอก LLM ให้รู้ว่าตัวละครกำลังทำอะไร และต้องการอะไรใน outfit ───
+        weapon_hint = ""
+        weapon_keywords = [
+            "sword",
+            "spear",
+            "bow",
+            "arrow",
+            "staff",
+            "blade",
+            "dagger",
+            "lance",
+            "axe",
+            "weapon",
+            "gun",
+            "rifle",
+            "knife",
+            "ทวน",
+            "ดาบ",
+            "หอก",
+            "คันธนู",
+            "กระบอง",  # Thai keywords
+        ]
+        action_lower = action_raw.lower()
+        has_weapon = any(kw in action_lower for kw in weapon_keywords)
+        if has_weapon:
+            weapon_hint = (
+                "\n        IMPORTANT: The character is using a weapon in this action. "
+                "You MUST describe the weapon's appearance in detail within outfit_tags."
+            )
 
         prompt = f"""You are a Stable Diffusion character prompt engineer.
 
         Character: {character_name}
         Scene setting: {scene_description}
+        Current action: {action_raw if action_raw else 'none'}
+        Current pose: {pose_raw}
+        Expression: {expr_raw}
         Art style: {style}
+        {weapon_hint}
 
-        Task: Decide what {character_name} is wearing and doing in this scene.
+        Task: Decide what {character_name} is wearing and holding that fits their current action and scene.
 
-        Base appearance (DO NOT repeat these in your output):
-        {appearance_anchor}
+        Base appearance (DO NOT repeat these): {appearance_anchor}
 
-        Output rules:
-        - Describe ONLY: outfit, clothing type, accessories WORN, activity/pose
-        - Infer clothing from the scene setting and art style
-        - DO NOT repeat appearance tags (hair, eyes, skin)
-        - comma separated tags
-        - 6 to 10 tags only
-        - English only
+        Rules:
+        - Describe OUTFIT that matches the action and scene atmosphere
+        - If the character is doing a physical action (fighting, running, casting spell),
+          choose clothes appropriate for that activity
+        - If the action involves holding/using an object or weapon, describe it explicitly
+          (e.g., "holding a silver spear with red tassel", "gripping ornate sword hilt")
+        - DO NOT repeat appearance tags (hair, eyes, skin, face)
+        - 6 to 12 tags only, comma separated, English only
 
-        Example output:
-        {{"outfit_tags": "worn cotton shirt, loose trousers, straw hat, barefoot"}}
+        Example (fighting scene):
+        {{"outfit_tags": "warrior training robe, leather bracers, silver spear with red tassel, combat stance"}}
+
+        Example (calm scene):
+        {{"outfit_tags": "light blue hanfu, jade hair ornament, flowing sleeves, relaxed posture"}}
 
         Return JSON only:"""
 
@@ -244,14 +308,20 @@ class GenerateCharacterPrompt:
                 data.get("outfit_tags", "").strip() or "simple casual clothing"
             )
 
-            full_prompt = (
-                f"{prefix}, "
-                f"{identity}, "
-                f"{appearance_anchor}, "
-                f"{outfit_tags}, "
-                f"{emotion_tags}, "
-                f"{self.__FIXED_SUFFIX}"
-            )
+            # ── ประกอบ final prompt ──
+            # ลำดับสำคัญ: prefix → identity → appearance → outfit/weapon → action → emotion → suffix
+            parts = [
+                prefix,
+                identity,
+                appearance_anchor,
+                outfit_tags,
+                action_tags,  # pose + action พร้อม weight
+            ]
+            if emotion_tags:
+                parts.append(emotion_tags)
+            parts.append(self.__FIXED_SUFFIX)
+
+            full_prompt = ", ".join(p for p in parts if p)
 
             return {
                 "positive_prompt": full_prompt,
@@ -259,16 +329,22 @@ class GenerateCharacterPrompt:
             }
 
         except Exception as e:
-            print(f"⚠ Scene prompt error [{character_name}|{emotion}]: {e}")
+            print(f"⚠ Scene prompt error [{character_name}]: {e}")
+            action_tags_fb, emotion_tags_fb = self._build_expression_tags(
+                scene_character
+            )
+            parts = [
+                prefix,
+                identity,
+                appearance_anchor,
+                "simple casual clothing",
+                action_tags_fb,
+            ]
+            if emotion_tags_fb:
+                parts.append(emotion_tags_fb)
+            parts.append(self.__FIXED_SUFFIX)
             return {
-                "positive_prompt": (
-                    f"{prefix}, "
-                    f"{identity}, "
-                    f"{appearance_anchor}, "
-                    f"simple casual clothing, "
-                    f"{emotion_tags}, "
-                    f"{self.__FIXED_SUFFIX}"
-                ),
+                "positive_prompt": ", ".join(p for p in parts if p),
                 "negative_prompt": negative,
             }
 

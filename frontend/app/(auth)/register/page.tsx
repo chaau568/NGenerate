@@ -85,7 +85,11 @@ export default function RegisterPage() {
         return;
       }
       sessionStorage.removeItem("register_pending_email");
-      router.push("/library");
+      if (result.role === "admin") {
+        router.push("/main-dashboard");
+      } else {
+        router.push("/library");
+      }
     } catch {
       setOtpError("Something went wrong. Please try again.");
     } finally {

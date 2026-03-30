@@ -50,13 +50,16 @@ class AIService:
             style=style,
         )
 
-    def generate_character_emotion(
-        self, character, reference_image_path, output_path, style="ghibli"
+    def generate_character_scene(
+        self,
+        scene_character,
+        reference_image_path,
+        output_path,
+        style="ghibli",
     ):
-
         return self.image.generate_character_with_ref(
-            positive_prompt=character.positive_prompt,
-            negative_prompt=character.negative_prompt,
+            positive_prompt=scene_character.positive_prompt,
+            negative_prompt=scene_character.negative_prompt,
             reference_image_path=reference_image_path,
             output_path=output_path,
             style=style,

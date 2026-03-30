@@ -1,0 +1,332 @@
+/* ══════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════ */
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  /* right-edge rule — matches design of other pages */
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Logo ── */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 10px 16px;
+}
+
+.logoMark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #1e88e5;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px rgba(30, 136, 229, 0.35);
+}
+
+.logoText {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #f0efe9;
+}
+
+/* ── Nav ── */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Shared item style (nav links + logout + profile) ── */
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: rgba(240, 239, 233, 0.5);
+  text-decoration: none;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  transition:
+    background 0.13s,
+    color 0.13s;
+  /* reset button defaults */
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1;
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(240, 239, 233, 0.85);
+}
+
+.itemIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.13s;
+}
+
+.item:hover .itemIcon {
+  opacity: 1;
+}
+
+.itemLabel {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Active state ── */
+.active {
+  background: rgba(30, 136, 229, 0.14) !important;
+  color: #93c5fd !important;
+  border: 1px solid rgba(30, 136, 229, 0.22);
+}
+
+.active .itemIcon {
+  opacity: 1;
+}
+
+.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 55%;
+  background: #1e88e5;
+  border-radius: 0 3px 3px 0;
+}
+
+/* ── Gold (Package) ── */
+.gold {
+  color: rgba(253, 230, 138, 0.65);
+}
+
+.gold:hover {
+  color: #fde68a !important;
+  background: rgba(253, 230, 138, 0.07) !important;
+}
+
+.gold.active {
+  background: rgba(253, 230, 138, 0.1) !important;
+  color: #fde68a !important;
+  border-color: rgba(253, 230, 138, 0.2) !important;
+}
+
+.gold.active::before {
+  background: #fbbf24;
+}
+
+/* ── Unread badge ── */
+.badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* ── Bottom section ── */
+.bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 6px 4px 8px;
+}
+
+/* ── Logout button ── */
+.logoutBtn {
+  color: rgba(248, 113, 113, 0.65);
+}
+
+.logoutBtn:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #fca5a5 !important;
+}
+
+/* ── Profile item ── */
+.profileItem {
+  margin-top: 2px;
+}
+
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgba(240, 239, 233, 0.6);
+  transition: border-color 0.13s;
+}
+
+.item:hover .avatar,
+.active .avatar {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #f0efe9;
+}
+
+/* ══════════════════════════════════════
+   LOGOUT MODAL
+══════════════════════════════════════ */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 32px 28px 28px;
+  width: 320px;
+  max-width: 90vw;
+  text-align: center;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
+  animation: modalIn 0.18s ease;
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modalIconWrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  margin: 0 auto 16px;
+}
+
+.modalTitle {
+  font-size: 19px;
+  font-weight: 800;
+  color: #f0efe9;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+}
+
+.modalDesc {
+  font-size: 13px;
+  color: rgba(240, 239, 233, 0.4);
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+}
+
+.modalCancel {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(240, 239, 233, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.13s,
+    color 0.13s;
+}
+
+.modalCancel:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #f0efe9;
+}
+
+.modalConfirm {
+  flex: 1;
+  padding: 11px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.13s;
+}
+
+.modalConfirm:hover {
+  background: #ef4444;
+}
+
+.modalCancel:disabled,
+.modalConfirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

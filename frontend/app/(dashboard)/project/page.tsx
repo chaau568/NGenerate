@@ -35,7 +35,6 @@ export default function ProjectPage() {
   const prevCurrentCount = useRef(0);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<any | null>(null);
 
@@ -43,6 +42,12 @@ export default function ProjectPage() {
   const [retryTarget, setRetryTarget] = useState<{
     sessionId: number;
     sessionName: string;
+  } | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "session" | "run";
+    sessionId: number;
+    runId?: number;
   } | null>(null);
 
   const { data: currentData } = useQuery({
@@ -81,13 +86,28 @@ export default function ProjectPage() {
     generation_history.length === 0 &&
     failed_history.length === 0;
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await clientFetch(`/api/project/${id}`, { method: "DELETE" });
+  const deleteSessionMutation = useMutation({
+    mutationFn: async (sessionId: number) => {
+      await clientFetch(`/api/project/${sessionId}`, { method: "DELETE" });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["currentTasks"] });
       queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+    },
+  });
+
+  const deleteRunMutation = useMutation({
+    mutationFn: async (runId: number) => {
+      await clientFetch(`/api/sessions/generation-run/${runId}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["finishedTasks"] });
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
     },
   });
 
@@ -106,13 +126,13 @@ export default function ProjectPage() {
   });
 
   const handleConfirmDelete = () => {
-    if (!selectedId) return;
-    deleteMutation.mutate(selectedId, {
-      onSuccess: () => {
-        setShowDeleteModal(false);
-        setSelectedId(null);
-      },
-    });
+    if (!deleteTarget) return;
+
+    if (deleteTarget.type === "run" && deleteTarget.runId) {
+      deleteRunMutation.mutate(deleteTarget.runId);
+    } else {
+      deleteSessionMutation.mutate(deleteTarget.sessionId);
+    }
   };
 
   const handleConfirmRetry = () => {
@@ -234,7 +254,10 @@ export default function ProjectPage() {
                         className={styles.iconBtnDanger}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedId(task.session_id);
+                          setDeleteTarget({
+                            type: "session",
+                            sessionId: task.session_id,
+                          });
                           setShowDeleteModal(true);
                         }}
                       >
@@ -328,7 +351,10 @@ export default function ProjectPage() {
                       className={styles.dangerBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedId(item.session_id);
+                        setDeleteTarget({
+                          type: "session",
+                          sessionId: item.session_id,
+                        });
                         setShowDeleteModal(true);
                       }}
                     >
@@ -427,7 +453,11 @@ export default function ProjectPage() {
                       className={styles.dangerBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedId(item.session_id);
+                        setDeleteTarget({
+                          type: "run",
+                          sessionId: item.session_id,
+                          runId: item.generation_run_id,
+                        });
                         setShowDeleteModal(true);
                       }}
                     >
@@ -513,7 +543,22 @@ export default function ProjectPage() {
                       className={styles.dangerBtn}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedId(item.session_id);
+
+                        if (
+                          item.failed_type === "generation" &&
+                          item.generation_run_id
+                        ) {
+                          setDeleteTarget({
+                            type: "run",
+                            sessionId: item.session_id,
+                            runId: item.generation_run_id,
+                          });
+                        } else {
+                          setDeleteTarget({
+                            type: "session",
+                            sessionId: item.session_id,
+                          });
+                        }
                         setShowDeleteModal(true);
                       }}
                     >
@@ -533,16 +578,23 @@ export default function ProjectPage() {
           isOpen={showDeleteModal}
           onClose={() => {
             setShowDeleteModal(false);
-            setSelectedId(null);
+            setDeleteTarget(null);
           }}
           onConfirm={handleConfirmDelete}
-          isLoading={deleteMutation.isPending}
-          title="Delete Project?"
+          isLoading={
+            deleteSessionMutation.isPending || deleteRunMutation.isPending
+          }
+          title={
+            deleteTarget?.type === "run"
+              ? "Delete Generation Run?"
+              : "Delete Project?"
+          }
           description={
-            <p>
-              Are you sure you want to delete this project? This action cannot
-              be undone.
-            </p>
+            deleteTarget?.type === "run" ? (
+              <p>ลบ generation run นี้ออก session และ analysis ยังคงอยู่</p>
+            ) : (
+              <p>ลบ project ทั้งหมด รวม analysis และ generation ทั้งหมด</p>
+            )
           }
         />
       )}

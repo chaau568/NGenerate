@@ -1,6 +1,6 @@
 import os
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -8,14 +8,14 @@ from django.shortcuts import get_object_or_404
 
 from .models import Novel, Chapter
 from notifications.models import Notification
-from .tasks import process_uploaded_file_task, fix_chapters_batch_task
+from .tasks import process_uploaded_file_task
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 
 from utils.file_url import build_file_url
 
-from django.db import models, transaction
+from django.db import transaction
 from payments.services.credit_service import CreditService
 from ngenerate_sessions.pricing import CreditPricing
 
@@ -252,6 +252,77 @@ def novel_characters(request, novel_id):
     },
     tags=["Chapters"],
 )
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def create_chapter(request, novel_id):
+
+#     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
+
+#     story_text = request.data.get("story")
+#     file_obj = request.FILES.get("file")
+
+#     # ---------------- TEXT ----------------
+
+#     if story_text:
+
+#         if isinstance(story_text, str):
+#             chapters_to_add = [story_text]
+
+#         elif isinstance(story_text, list):
+#             chapters_to_add = story_text
+
+#         else:
+#             return Response(
+#                 {"error": "Invalid text format"}, status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         new_chapters = novel.bulk_add_chapters(chapters_to_add)
+
+#         return Response(
+#             {
+#                 "status": "completed",
+#                 "message": f"Created {len(new_chapters)} chapters from text",
+#                 "chapters": [{"id": c.id, "title": c.title} for c in new_chapters],
+#             },
+#             status=status.HTTP_201_CREATED,
+#         )
+
+#     # ---------------- FILE ----------------
+
+#     if file_obj:
+#         notification = Notification.objects.create(
+#             user=request.user,
+#             novel=novel,
+#             task_type="upload",
+#             message=f"Processing file {file_obj.name}",
+#         )
+
+#         file_bytes = file_obj.read()
+#         file_name = file_obj.name
+#         content_type = file_obj.content_type
+
+#         process_uploaded_file_task.delay(
+#             novel.id,
+#             file_bytes,
+#             file_name,
+#             content_type,
+#             notification.id,
+#         )
+
+#         return Response(
+#             {
+#                 "status": "processing",
+#                 "message": "File is being processed in background.",
+#             },
+#             status=status.HTTP_202_ACCEPTED,
+#         )
+
+#     return Response(
+#         {"error": "No content or file provided"},
+#         status=status.HTTP_400_BAD_REQUEST,
+#     )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_chapter(request, novel_id):
@@ -405,58 +476,56 @@ def retry_upload(request, novel_id, notification_id):
     )
 
 
-import math
-
-
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def fix_chapters_batch(request, novel_id):
-    novel = get_object_or_404(Novel, id=novel_id, user=request.user)
-
-    chapter_ids = request.data.get("chapter_ids", [])
-    if not chapter_ids:
-        return Response(
-            {"detail": "No chapter IDs provided"}, status=status.HTTP_400_BAD_REQUEST
-        )
-
-    num_chapters = len(chapter_ids)
-
-    cost_per_chapter = 2.5 / CreditPricing.CHAPTER_UNIT
-    total_cost = math.ceil(cost_per_chapter * num_chapters)
+@permission_classes([AllowAny])
+def runpod_webhook(request):
+    data = request.data
+    novel_id = data.get("novel_id")
+    status_ai = data.get("status")
 
     try:
-        with transaction.atomic():
-            CreditService.consume_credit(
-                user=request.user,
-                amount=total_cost,
-                description=f"AI Fix Text: {num_chapters} chapters (Novel: {novel.title})",
-            )
+        novel = Novel.objects.get(id=novel_id)
+        notification = Notification.objects.filter(
+            novel=novel, task_type="upload"
+        ).last()
 
-            notification = Notification.objects.create(
-                user=request.user,
-                novel=novel,
-                task_type="fix_text",
-                status="processing",
-                message=f"กำลังเตรียมแก้ไข {num_chapters} ตอน...",
-            )
+        # --- CASE 1: รับข้อมูลทีละบท (ส่งมาจาก send_update ใน FastAPI) ---
+        if status_ai == "processing_item":
+            chapter_data = data.get("chapter")
+            if chapter_data:
+                # ใช้ฟังก์ชันเดิมที่คุณเขียนไว้ มันเช็ค exists ให้อยู่แล้ว
+                novel.bulk_add_chapters([chapter_data])
 
-            fix_chapters_batch_task.delay(chapter_ids, notification.id, total_cost)
+                # อัปเดต Progress ใน Notification ให้ User เห็นว่ากำลังไหลเข้า
+                if notification:
+                    count = novel.chapters.count()
+                    notification.message = f"กำลังประมวลผล... นำเข้าแล้ว {count} ตอน"
+                    notification.save(update_fields=["message", "updated_at"])
 
-            return Response(
-                {
-                    "status": "processing",
-                    "notification_id": notification.id,
-                    "cost": total_cost,
-                    "message": "AI กำลังทำงานเบื้องหลัง",
-                },
-                status=status.HTTP_202_ACCEPTED,
-            )
+            return Response({"status": "item_saved"})
 
-    except ValueError:
-        return Response(
-            {"detail": "จำนวน Credits ไม่เพียงพอ"}, status=status.HTTP_400_BAD_REQUEST
-        )
+        # --- CASE 2: ประมวลผลเสร็จสิ้นทั้งหมด ---
+        elif status_ai == "success":
+            # กรณีคุณยังส่ง list รวม (chapters) มาใน success ด้วย ก็รันซ้ำได้
+            # แต่ถ้าใน FastAPI ไม่ส่งแล้ว ก็แค่ปิดงาน Notification
+            if notification:
+                total_chapters = novel.chapters.count()
+                notification.status = "success"
+                notification.message = f"ประมวลผลเสร็จสมบูรณ์! ทั้งหมด {total_chapters} ตอน"
+                notification.save()
+            return Response({"status": "completed"})
+
+        # --- CASE 3: เกิดข้อผิดพลาด ---
+        elif status_ai == "error":
+            if notification:
+                notification.status = "error"
+                notification.message = data.get("message", "AI processing failed")
+                notification.save()
+            return Response({"status": "error_logged"})
+
+    except Novel.DoesNotExist:
+        return Response({"error": "Novel not found"}, status=404)
     except Exception as e:
-        return Response(
-            {"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({"error": str(e)}, status=500)
+
+    return Response({"status": "received"})

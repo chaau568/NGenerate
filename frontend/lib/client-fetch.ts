@@ -1,7 +1,4 @@
-export async function clientFetch(
-  url: string,
-  options: RequestInit = {}
-) {
+export async function clientFetch(url: string, options: RequestInit = {}) {
   const makeRequest = () =>
     fetch(url, {
       ...options,
@@ -17,10 +14,15 @@ export async function clientFetch(
     });
 
     if (!refreshRes.ok) {
+      window.location.href = "/login";
       return refreshRes;
     }
 
     res = await makeRequest();
+  }
+
+  if (res.status === 403) {
+    window.location.href = "/403";
   }
 
   return res;

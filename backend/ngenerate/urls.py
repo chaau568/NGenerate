@@ -34,6 +34,7 @@ urlpatterns = [
     path('session/', include("ngenerate_sessions.urls")),
     path('asset/', include("asset.urls")),
     path('notification/', include("notifications.urls")),
+    path("admin-console/", include("admin_console.urls")),
 ]
 
 # การจัดการ Media และ Static files ในช่วง Development

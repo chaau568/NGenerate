@@ -118,30 +118,67 @@ class Novel(models.Model):
     @transaction.atomic
     def bulk_add_chapters(self, chapters_data: list):
         last_chapter = self.chapters.order_by("order").last()
-        current_order = last_chapter.order if last_chapter else 0
+        last_order = last_chapter.order if last_chapter else 0
 
         new_chapters = []
-        for content in chapters_data:
-            current_order += 1
-            generate_title = f"{self.title}#{current_order}"
-            new_chapters.append(
-                Chapter(
-                    novel=self, order=current_order, title=generate_title, story=content
+        for item in chapters_data:
+            if isinstance(item, dict):
+                order_from_file = item.get("order")
+                content = item.get("story", "")
+            else:
+                order_from_file = None
+                content = item
+
+            if order_from_file is not None:
+                current_order = order_from_file
+            else:
+                last_order += 1
+                current_order = last_order
+
+            if not Chapter.objects.filter(novel=self, order=current_order).exists():
+                new_chapters.append(
+                    Chapter(
+                        novel=self,
+                        order=current_order,
+                        title=f"{self.title}#{current_order}",
+                        story=content,
+                    )
                 )
-            )
+            else:
+                print(f"[Skip] Chapter order {current_order} already exists")
 
-        Novel.objects.filter(id=self.id).update(updated_at=timezone.now())
+        if new_chapters:
+            created = Chapter.objects.bulk_create(new_chapters)
+            self.updated_at = timezone.now()
+            self.save(update_fields=["updated_at"])
+            return created
+        return []
 
-        return Chapter.objects.bulk_create(new_chapters)
+    # @transaction.atomic
+    # def bulk_add_chapters(self, chapters_data: list):
+    #     last_chapter = self.chapters.order_by("order").last()
+    #     current_order = last_chapter.order if last_chapter else 0
 
-    def edit(self, title=None, cover=None):
-        if title is not None:
-            self.title = title
-        if cover is not None:
-            self.cover = cover
-
-        self.save()
-        return self
+    #     new_chapters = []
+    #     for content in chapters_data:
+    #         current_order += 1
+    #         generate_title = f"{self.title}#{current_order}"
+    #         new_chapters.append(
+    #             Chapter(
+    #                 novel=self, 
+    #                 order=current_order, 
+    #                 title=generate_title, 
+    #                 story=content
+    #             )
+    #         )
+        
+    #     # เพิ่มบรรทัดนี้ครับ!
+    #     if new_chapters:
+    #         created_chapters = Chapter.objects.bulk_create(new_chapters)
+    #         self.updated_at = timezone.now()
+    #         self.save(update_fields=["updated_at"])
+    #         return created_chapters
+    #     return []
 
 
 class Chapter(models.Model):
@@ -173,15 +210,15 @@ class Chapter(models.Model):
 
         self.save()
         return self
-    
+
     def fix_story_with_ai(self):
         url = f"{settings.AI_API_URL}/fix-text/process-chapter"
         payload = {"story": self.story}
-        
+
         try:
             resp = requests.post(url, json=payload, timeout=600)
             resp.raise_for_status()
-            
+
             fixed_data = resp.json()
             self.story = fixed_data.get("fixed_story", self.story)
             self.save(update_fields=["story", "updated_at"])

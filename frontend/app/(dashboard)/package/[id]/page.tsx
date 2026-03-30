@@ -35,44 +35,24 @@ export default function PaymentPage({
   const router = useRouter();
   const { id } = use(params);
 
-  const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
   const [failedMessage, setFailedMessage] = useState<string>("");
 
-  useEffect(() => {
-    const createPayment = async () => {
-      try {
-        setLoading(true);
-        const res = await clientFetch("/api/package", {
-          method: "POST",
-          body: JSON.stringify({ package_id: parseInt(id) }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setFailedMessage(
-            data?.detail ||
-              data?.message ||
-              "Something went wrong. Please try again.",
-          );
-          setShowFailed(true);
-          return;
-        }
-        setPaymentData(data as PaymentData);
-        setTimeLeft(data.expire_in_minutes * 60);
-      } catch (err: unknown) {
-        setFailedMessage(
-          err instanceof Error ? err.message : "Unable to connect to server.",
-        );
-        setShowFailed(true);
-      } finally {
-        setLoading(false);
+  const { data: paymentData, isLoading } = useQuery({
+    queryKey: ["payment", id],
+    queryFn: async () => {
+      const res = await clientFetch(`/api/package/${id}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.message || "Failed to fetch payment");
       }
-    };
-    createPayment();
-  }, [id]);
+
+      return data;
+    },
+  });
 
   const { data: paymentStatus } = useQuery({
     queryKey: ["payment-status", paymentData?.transaction_id],
@@ -125,7 +105,19 @@ export default function PaymentPage({
     : 100;
   const isUrgent = timeLeft < 60;
 
-  if (loading) {
+  useEffect(() => {
+    if (paymentData?.expire_in_minutes) {
+      setTimeLeft(paymentData.expire_in_minutes * 60);
+    }
+  }, [paymentData]);
+
+  useEffect(() => {
+    if (!isLoading && !paymentData) {
+      router.push("/package");
+    }
+  }, [isLoading, paymentData, router]);
+
+  if (isLoading) {
     return (
       <div className={styles.container}>
         <div className={styles.loadingState}>

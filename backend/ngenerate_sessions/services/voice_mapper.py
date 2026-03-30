@@ -10,30 +10,14 @@ class VoiceMapper:
         "sad": {"speed": 0.9, "cross_fade_duration": 0.2, "step": 48, "cfg": 2.0},
         "serious": {"speed": 1.0, "cross_fade_duration": 0.1, "step": 50, "cfg": 2.5},
     }
-    
-    # EMOTION_CONFIGS = {
-    #     "happy": {"speed": 0.8, "cross_fade_duration": 0.1, "step": 64, "cfg": 2.5},
-    #     "neutral": {"speed": 0.8, "cross_fade_duration": 0.1, "step": 64, "cfg": 2.5},
-    #     "angry": {"speed": 0.8, "cross_fade_duration": 0.1, "step": 64, "cfg": 2.5},
-    #     "sad": {"speed": 0.8, "cross_fade_duration": 0.1, "step": 64, "cfg": 2.5},
-    #     "serious": {"speed": 0.8, "cross_fade_duration": 0.1, "step": 64, "cfg": 2.5},
-    # }
 
     @staticmethod
-    def map(session, sentence):
+    def map(session):
 
         voice_type = session.narrator_voice or VoiceMapper.DEFAULT_VOICE
 
-        # emotion = (sentence.emotion or "neutral").lower()
         emotion = "neutral"
-
-        # if emotion not in VoiceMapper.VALID_EMOTIONS:
-        #     emotion = "neutral"
             
         config = VoiceMapper.EMOTION_CONFIGS["neutral"]
-
-        # config = VoiceMapper.EMOTION_CONFIGS.get(
-        #     emotion, VoiceMapper.EMOTION_CONFIGS["neutral"]
-        # )
 
         return voice_type, emotion, config

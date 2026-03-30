@@ -6,6 +6,7 @@ import { ChevronLeft, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import styles from "./page.module.css";
+import SharePopUp_Delete from "@/components/SharePopUp_Delete";
 
 interface CharacterProfile {
   id: number;
@@ -30,6 +31,11 @@ export default function CharacterListPage({
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
 
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [selectedCharacter, setSelectedCharacter] =
+    useState<CharacterProfile | null>(null);
+
   useEffect(() => {
     clientFetch(`/api/library/${id}/characters`)
       .then(async (res) => {
@@ -44,21 +50,41 @@ export default function CharacterListPage({
     return `${process.env.NEXT_PUBLIC_API_BASE_URL}${path}`;
   };
 
-  const handleDelete = async (characterId: number) => {
-    if (!confirm("Delete this character?")) return;
+  const handleDeleteClick = (character: CharacterProfile) => {
+    if (isDeleting) return;
+    setSelectedCharacter(character);
+    setIsDeleteOpen(true);
+  };
 
-    const res = await clientFetch(`/api/library/character/${characterId}`, {
-      method: "DELETE",
-    });
+  const handleConfirmDelete = async () => {
+    if (!selectedCharacter) return;
 
-    if (res.ok) {
-      setCharacters((prev) => prev.filter((c) => c.id !== characterId));
+    const prevCharacters = [...characters];
 
-      if (selected === characterId) {
-        setSelected(null);
-      }
-    } else {
+    try {
+      setIsDeleting(true);
+
+      setCharacters((prev) =>
+        prev.filter((c) => c.id !== selectedCharacter.id),
+      );
+
+      const res = await clientFetch(
+        `/api/library/character/${selectedCharacter.id}`,
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) throw new Error("Delete failed");
+
+      setIsDeleteOpen(false);
+      setSelectedCharacter(null);
+    } catch (err) {
+      console.error(err);
+
+      setCharacters(prevCharacters);
+
       alert("Failed to delete character");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -188,7 +214,7 @@ export default function CharacterListPage({
                   )}
                   <button
                     className={styles.deleteBtn}
-                    onClick={() => handleDelete(active.id)}
+                    onClick={() => handleDeleteClick(active)}
                   >
                     Delete Character
                   </button>
@@ -203,6 +229,22 @@ export default function CharacterListPage({
           </div>
         </div>
       )}
+      <SharePopUp_Delete
+        isOpen={isDeleteOpen}
+        onClose={() => !isDeleting && setIsDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Character"
+        description={
+          <>
+            Are you sure you want to delete{" "}
+            <strong>{selectedCharacter?.name}</strong>?
+            <br />
+            This action cannot be undone.
+          </>
+        }
+        confirmText="Delete"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

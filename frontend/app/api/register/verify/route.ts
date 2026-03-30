@@ -10,10 +10,10 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-        return NextResponse.json(data, { status: res.status });
+        return NextResponse.json(data, { status: res.status});
     }
 
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true, role: data.role, });
 
     response.cookies.set("access", data.access, {
         httpOnly: true,

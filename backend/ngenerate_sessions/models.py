@@ -48,30 +48,23 @@ class Session(models.Model):
     )
 
     novel = models.ForeignKey(Novel, on_delete=models.CASCADE, related_name="sessions")
-
     chapters = models.ManyToManyField(Chapter, related_name="sessions")
-
     name = models.CharField(max_length=255, blank=True)
 
     session_type = models.CharField(
         max_length=50, choices=SESSION_TYPE_CHOICES, default="analysis"
     )
-
     current_phase = models.CharField(
         max_length=20, choices=PHASE_CHOICES, default="none"
     )
-
     style = models.CharField(max_length=50, choices=STYLE_CHOICES, default="ghibli")
-
     narrator_voice = models.CharField(
         max_length=20, choices=NARRATOR_VOICE_CHOICES, default="man1"
     )
 
     analyze_credits = models.PositiveIntegerField(default=0)
     locked_credits = models.PositiveIntegerField(default=0)
-
     is_analysis_done = models.BooleanField(default=False)
-
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -114,7 +107,8 @@ class Session(models.Model):
         sentence_count = self.sentences.count()
         sentence_credit = CreditPricing.sentence_to_credit(sentence_count)
 
-        character_image_count = self.characters.count()
+        # ใช้ SceneCharacter แทน Character เดิม
+        character_image_count = self.scene_characters.count()
         character_credit = character_image_count * CreditPricing.CHARACTER_IMAGE
 
         scene_count = self.illustrations.count()
@@ -127,9 +121,7 @@ class Session(models.Model):
     # =====================================================
 
     def start_analysis(self):
-
         with transaction.atomic():
-
             session = Session.objects.select_for_update().get(pk=self.pk)
 
             if session.status not in ["draft", "failed"]:
@@ -164,15 +156,12 @@ class Session(models.Model):
             )
 
     def complete_analysis(self):
-
         with transaction.atomic():
-
             session = Session.objects.select_for_update().get(pk=self.pk)
 
             session.chapters.update(is_analyzed=True)
 
             locked = session.locked_credits
-
             session.locked_credits = 0
             session.status = "analyzed"
             session.current_phase = "none"
@@ -210,9 +199,7 @@ class Session(models.Model):
     # =====================================================
 
     def fail(self, error_msg=None):
-
         with transaction.atomic():
-
             session = Session.objects.select_for_update().get(pk=self.pk)
 
             if session.locked_credits > 0:
@@ -243,7 +230,6 @@ class Session(models.Model):
     # =====================================================
 
     def get_progress_percentage(self):
-
         if self.status == "analyzed":
             return 100
 
@@ -276,7 +262,6 @@ class Session(models.Model):
         notification.save(update_fields=["message", "updated_at"])
 
     def create_processing_steps(self, phase):
-
         self.processing_steps.filter(phase=phase).delete()
 
         steps_config = {
@@ -356,14 +341,12 @@ class GenerationRun(models.Model):
     )
 
     version = models.PositiveIntegerField(default=1)
-
     style = models.CharField(max_length=50, choices=Session.STYLE_CHOICES)
     narrator_voice = models.CharField(
         max_length=20, choices=Session.NARRATOR_VOICE_CHOICES
     )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-
     generate_credits = models.PositiveIntegerField(default=0)
     locked_credits = models.PositiveIntegerField(default=0)
 
@@ -399,9 +382,7 @@ class GenerationRun(models.Model):
         )
 
     def start(self):
-
         with transaction.atomic():
-
             run = GenerationRun.objects.select_for_update().get(pk=self.pk)
             session = Session.objects.select_for_update().get(pk=run.session_id)
 
@@ -448,16 +429,13 @@ class GenerationRun(models.Model):
             )
 
     def complete(self):
-
         with transaction.atomic():
-
             run = GenerationRun.objects.select_for_update().get(pk=self.pk)
 
             if run.status != "generating":
                 raise ValidationError("Invalid state")
 
             locked = run.locked_credits
-
             run.locked_credits = 0
             run.status = "generated"
             run.generation_finished_at = timezone.now()
@@ -488,9 +466,7 @@ class GenerationRun(models.Model):
                 )
 
     def fail(self, error_msg=None):
-
         with transaction.atomic():
-
             run = GenerationRun.objects.select_for_update().get(pk=self.pk)
             session = run.session
 
@@ -524,7 +500,6 @@ class GenerationRun(models.Model):
     # =====================================================
 
     def get_progress_percentage(self):
-
         if self.status == "generated":
             return 100
 
@@ -565,7 +540,7 @@ class GenerationRun(models.Model):
         steps_config = [
             (1, "Generating Character Master"),
             (2, "Generating Scenes & Voices"),
-            (3, "Generating Character Emotions"),
+            (3, "Generating Character Scenes"),
             (4, "Composing Final Video"),
         ]
 
@@ -652,25 +627,22 @@ class CharacterProfile(models.Model):
         return build_file_url("assets/defaults/default_avatar.jpg")
 
 
-class Sentence(models.Model):
+# =====================================================
+# SENTENCE
+# ลบ emotion ออก — ไม่ได้ใช้สำหรับ TTS แล้ว
+# =====================================================
 
-    EMOTION_CHOICES = (
-        ("neutral", "Neutral"),
-        ("happy", "Happy"),
-        ("sad", "Sad"),
-        ("angry", "Angry"),
-        ("serious", "Serious"),
-    )
+
+class Sentence(models.Model):
 
     session = models.ForeignKey(
         Session, on_delete=models.CASCADE, related_name="sentences"
     )
-
     chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE)
     sentence_index = models.PositiveIntegerField()
+
     tts_text = models.TextField(blank=True)
     sentence = models.TextField()
-    emotion = models.CharField(choices=EMOTION_CHOICES, max_length=50, blank=True)
 
     class Meta:
         unique_together = ("session", "chapter", "sentence_index")
@@ -681,63 +653,11 @@ class Sentence(models.Model):
 
     def __str__(self):
         return f"{self.session} | {self.chapter} | {self.sentence_index}"
-    
-    @classmethod
-    def get_emotion_choices(cls) -> list[str]:
-        return [value for value, _ in cls.EMOTION_CHOICES]
 
 
-class Character(models.Model):
-
-    session = models.ForeignKey(
-        Session,
-        on_delete=models.CASCADE,
-        related_name="characters",
-    )
-
-    illustration = models.ForeignKey(
-        "Illustration",
-        on_delete=models.CASCADE,
-        related_name="characters",
-    )
-
-    character_profile = models.ForeignKey(
-        CharacterProfile, on_delete=models.CASCADE, related_name="characters"
-    )
-
-    emotion = models.CharField(max_length=50)
-
-    positive_prompt = models.TextField(blank=True)
-    negative_prompt = models.TextField(blank=True)
-
-    class Meta:
-        unique_together = ("session", "illustration", "character_profile", "emotion")
-
-    def __str__(self):
-        scene_idx = self.illustration.scene_index
-        ch_order = self.illustration.chapter.order
-        return f"Ch{ch_order} Scene{scene_idx} | {self.character_profile.name} | {self.emotion}"
-
-
-class SentenceCharacter(models.Model):
-
-    sentence = models.ForeignKey(
-        Sentence, on_delete=models.CASCADE, related_name="sentence_characters"
-    )
-
-    character = models.ForeignKey(
-        Character, on_delete=models.CASCADE, related_name="sentence_characters"
-    )
-
-    class Meta:
-        unique_together = ("sentence", "character")
-        indexes = [
-            models.Index(fields=["sentence"]),
-            models.Index(fields=["character"]),
-        ]
-
-    def __str__(self):
-        return f"{self.sentence} | {self.character.character_profile.name}"
+# =====================================================
+# ILLUSTRATION  (scene unit — คงเดิม)
+# =====================================================
 
 
 class Illustration(models.Model):
@@ -745,7 +665,6 @@ class Illustration(models.Model):
     session = models.ForeignKey(
         Session, on_delete=models.CASCADE, related_name="illustrations"
     )
-
     chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE)
     scene_index = models.PositiveIntegerField(default=1)
     sentence_start = models.PositiveIntegerField(null=True, blank=True)
@@ -764,6 +683,60 @@ class Illustration(models.Model):
 
     def __str__(self):
         return f"{self.session} | Ch{self.chapter.order} | Scene {self.scene_index}"
+
+    def get_scene_characters(self):
+        """ดึง SceneCharacter ทั้งหมดของฉากนี้ พร้อม profile"""
+        return self.scene_characters.select_related("character_profile").all()
+
+
+# =====================================================
+# SCENE CHARACTER  (แทน Character + SentenceCharacter เดิม)
+#
+# 1 record = 1 ตัวละคร ต่อ 1 ฉาก
+# unique_together = (illustration, character_profile)
+# =====================================================
+
+
+class SceneCharacter(models.Model):
+
+    session = models.ForeignKey(
+        Session,
+        on_delete=models.CASCADE,
+        related_name="scene_characters",
+    )
+    illustration = models.ForeignKey(
+        Illustration,
+        on_delete=models.CASCADE,
+        related_name="scene_characters",
+    )
+    character_profile = models.ForeignKey(
+        CharacterProfile,
+        on_delete=models.CASCADE,
+        related_name="scene_characters",
+    )
+
+    pose = models.CharField(max_length=100, blank=True)
+    action = models.CharField(max_length=200, blank=True)
+    expression = models.CharField(max_length=100, blank=True)
+
+    positive_prompt = models.TextField(blank=True)
+    negative_prompt = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("illustration", "character_profile")
+        indexes = [
+            models.Index(fields=["session"]),
+            models.Index(fields=["illustration"]),
+        ]
+
+    def __str__(self):
+        scene_idx = self.illustration.scene_index
+        ch_order = self.illustration.chapter.order
+        return (
+            f"Ch{ch_order} Scene{scene_idx} | "
+            f"{self.character_profile.name} | "
+            f"{self.action or self.pose or 'idle'}"
+        )
 
 
 # =====================================================

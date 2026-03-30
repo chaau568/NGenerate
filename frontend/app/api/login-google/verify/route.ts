@@ -38,5 +38,5 @@ export async function POST(req: Request) {
         maxAge: 60 * 60 * 24 * 7, // 7 วัน
     });
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ success: true, role: data.role, }, { status: 200 });
 }

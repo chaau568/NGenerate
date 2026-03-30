@@ -122,7 +122,7 @@ class CharacterProfileAnalysis:
         - Actually appear or speak in the story
 
         Example output:
-        ["หานลี่", "อาสาม", "พ่อหมื่น"]
+        ["หานลี่", "อาสาม", "พ่อ"]
 
         Story:
         \"\"\"{chunk}\"\"\"
@@ -180,8 +180,9 @@ class CharacterProfileAnalysis:
 
         Your tasks:
         1. GROUP names that refer to the same person → pick the most complete/common name as canonical
-        2. REMOVE any non-human entries (animals, horses, places, organizations, sects)
-        3. REMOVE duplicates
+        2. DO NOT remove any names.
+        3. If a name might be non-human, keep it but mark it as uncertain.
+        4. REMOVE duplicates
 
         Name list:
         {names_str}
@@ -222,7 +223,9 @@ class CharacterProfileAnalysis:
         except Exception as e:
             print(f"⚠ Dedup error: {e}")
             # fallback: คืนแต่ละชื่อเป็น canonical ของตัวเอง
-            return {name: [] for name in names}
+            return {
+                name: [] for name in names
+            }  # ใช้ได้แล้ว แต่ต้อง ensure ว่า names มาจาก raw จริง
 
     # --------------------------------------------------
     # PASS 3: DESCRIBE EACH CHARACTER
@@ -384,4 +387,5 @@ class CharacterProfileAnalysis:
         return {
             "character_profile": profiles,
             "alias_map": canonical_map,
+            "raw_names": raw_names,  # ⭐ สำคัญ
         }
