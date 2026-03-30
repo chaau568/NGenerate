@@ -63,7 +63,7 @@ def create_session(request, novel_id):
     chapter_ids = request.data.get("chapter_ids", [])
     session_type = request.data.get("session_type", "analysis")
     name = request.data.get("name")
-    style = request.data.get("style", "ghibli")
+    style = request.data.get("style", "chinese-modern")
 
     if session_type not in dict(Session.SESSION_TYPE_CHOICES):
         return Response(

@@ -27,7 +27,7 @@ class Session(models.Model):
     )
 
     STYLE_CHOICES = (
-        ("ghibli", "Ghibli"),
+        # ("ghibli", "Ghibli"),
         ("chinese", "Chinese Oil Painting"),
         ("chinese-modern", "Chinese Modern (Xianxia)"),
         ("fantasy", "Fantasy"),
@@ -37,8 +37,8 @@ class Session(models.Model):
 
     NARRATOR_VOICE_CHOICES = (
         ("man1", "Man 1"),
-        ("man2", "Man 2"),
-        ("girl1", "Girl 1"),
+        # ("man2", "Man 2"),
+        # ("girl1", "Girl 1"),
     )
 
     PHASE_CHOICES = (

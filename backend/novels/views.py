@@ -483,49 +483,99 @@ def runpod_webhook(request):
     novel_id = data.get("novel_id")
     status_ai = data.get("status")
 
+    if not novel_id:
+        print("[ERROR] Missing novel_id")
+        return Response({"error": "Missing novel_id"}, status=400)
+
     try:
         novel = Novel.objects.get(id=novel_id)
+
         notification = Notification.objects.filter(
             novel=novel, task_type="upload"
         ).last()
 
-        # --- CASE 1: รับข้อมูลทีละบท (ส่งมาจาก send_update ใน FastAPI) ---
-        if status_ai == "processing_item":
-            chapter_data = data.get("chapter")
-            if chapter_data:
-                # ใช้ฟังก์ชันเดิมที่คุณเขียนไว้ มันเช็ค exists ให้อยู่แล้ว
-                novel.bulk_add_chapters([chapter_data])
+        # =========================
+        # CASE 1: BATCH (🔥 สำคัญสุด)
+        # =========================
+        if status_ai == "processing_batch":
+            chapters = data.get("chapters", [])
 
-                # อัปเดต Progress ใน Notification ให้ User เห็นว่ากำลังไหลเข้า
+            print(f"[BATCH] Incoming: {len(chapters)} chapters")
+
+            if chapters:
+                created = novel.bulk_add_chapters(chapters)
+
+                print(f"[BATCH] Created: {len(created)}")
+                print(f"[BATCH] Total in DB: {novel.chapters.count()}")
+
                 if notification:
-                    count = novel.chapters.count()
-                    notification.message = f"กำลังประมวลผล... นำเข้าแล้ว {count} ตอน"
+                    notification.message = (
+                        f"กำลังประมวลผล... นำเข้าแล้ว {novel.chapters.count()} ตอน"
+                    )
+                    notification.save(update_fields=["message", "updated_at"])
+
+            return Response({"status": "batch_saved"})
+
+        # =========================
+        # CASE 2: ITEM (fallback)
+        # =========================
+        elif status_ai == "processing_item":
+            chapter_data = data.get("chapter")
+
+            print("[ITEM] Incoming:", chapter_data)
+
+            if chapter_data:
+                created = novel.bulk_add_chapters([chapter_data])
+
+                print(f"[ITEM] Created: {len(created)}")
+                print(f"[ITEM] Total in DB: {novel.chapters.count()}")
+
+                if notification:
+                    notification.message = (
+                        f"กำลังประมวลผล... นำเข้าแล้ว {novel.chapters.count()} ตอน"
+                    )
                     notification.save(update_fields=["message", "updated_at"])
 
             return Response({"status": "item_saved"})
 
-        # --- CASE 2: ประมวลผลเสร็จสิ้นทั้งหมด ---
+        # =========================
+        # CASE 3: SUCCESS
+        # =========================
         elif status_ai == "success":
-            # กรณีคุณยังส่ง list รวม (chapters) มาใน success ด้วย ก็รันซ้ำได้
-            # แต่ถ้าใน FastAPI ไม่ส่งแล้ว ก็แค่ปิดงาน Notification
+            print("[SUCCESS] Processing completed")
+
             if notification:
                 total_chapters = novel.chapters.count()
                 notification.status = "success"
                 notification.message = f"ประมวลผลเสร็จสมบูรณ์! ทั้งหมด {total_chapters} ตอน"
                 notification.save()
+
             return Response({"status": "completed"})
 
-        # --- CASE 3: เกิดข้อผิดพลาด ---
+        # =========================
+        # CASE 4: ERROR
+        # =========================
         elif status_ai == "error":
+            print("[ERROR FROM AI]:", data.get("message"))
+
             if notification:
                 notification.status = "error"
                 notification.message = data.get("message", "AI processing failed")
                 notification.save()
+
             return Response({"status": "error_logged"})
 
-    except Novel.DoesNotExist:
-        return Response({"error": "Novel not found"}, status=404)
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
+        # =========================
+        # UNKNOWN STATUS
+        # =========================
+        else:
+            print("[WARNING] Unknown status:", status_ai)
+            return Response({"status": "ignored", "reason": "unknown status"})
 
-    return Response({"status": "received"})
+    except Novel.DoesNotExist:
+        print("[ERROR] Novel not found:", novel_id)
+        return Response({"error": "Novel not found"}, status=404)
+
+    except Exception as e:
+        print("[FATAL ERROR]:", str(e))
+        return Response({"error": str(e)}, status=500)
