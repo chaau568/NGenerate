@@ -14,11 +14,11 @@
 }
 
 .header_text {
-  flex: 9
+  flex: 9;
 }
 
 .header_button {
-  flex: 1
+  flex: 1;
 }
 
 .eyebrow {
@@ -78,9 +78,25 @@
 /* ── KPI GRID — 2 cols ── */
 .kpiGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   max-width: 600px;
+}
+
+.chartsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px; /* ระยะห่างระหว่าง 2 chart */
+}
+
+.blueBadge {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.goldBadge {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
 }
 
 .kpiCard {

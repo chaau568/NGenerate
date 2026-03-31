@@ -7,7 +7,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
-from payments.models import CreditLog
+from payments.models import CreditLog, Transaction
 from ngenerate_sessions.models import Session
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -28,6 +28,13 @@ def main_dashboard(request):
         or 0
     )
 
+    total_incomes = (
+        Transaction.objects.filter(payment_status="success").aggregate(
+            total=Sum("amount")
+        )["total"]
+        or 0
+    )
+
     # นับ user ที่มี session ที่ active จริงๆ (ไม่นับ deleted user)
     active_users = (
         Session.objects.filter(novel__user__is_active=True)
@@ -38,7 +45,8 @@ def main_dashboard(request):
 
     # ── Credit usage history (last 7 days) ─────────────
     today = timezone.now().date()
-    history = []
+    credit_history = []
+    income_history = []
 
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
@@ -47,7 +55,7 @@ def main_dashboard(request):
         day_end = day_start + timedelta(days=1)
 
         # ใช้ Abs() เช่นกัน เพื่อให้ได้ค่าบวก
-        total = (
+        c_total = (
             CreditLog.objects.filter(
                 type__in=["analysis_lock", "generation_lock"],
                 created_at__gte=day_start,
@@ -56,20 +64,33 @@ def main_dashboard(request):
             or 0
         )
 
-        history.append(
+        credit_history.append(
             {
                 "date": day.isoformat(),
-                "total": int(total),
+                "total": int(c_total),
             }
         )
+
+        i_total = (
+            Transaction.objects.filter(
+                payment_status="success",
+                created_at__gte=day_start,
+                created_at__lt=day_end,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+
+        income_history.append({"date": day.isoformat(), "total": int(i_total)})
 
     return Response(
         {
             "stats": {
                 "total_credits_used": int(total_credits_used),
+                "total_incomes": int(total_incomes),
                 "active_users": active_users,
             },
-            "credit_usage_history": history,
+            "credit_usage_history": credit_history,
+            "incomes_history": income_history,
         }
     )
 

@@ -46,7 +46,7 @@ class Transaction(models.Model):
     )
 
     payment_ref = models.CharField(max_length=255, null=True, blank=True)
-    omise_charge_id = models.CharField(
+    stripe_session_id = models.CharField(
         max_length=255, null=True, blank=True, unique=True
     )
 

@@ -221,9 +221,9 @@ OTP_LENGTH = env.int("OTP_LENGTH", default=6)                    # OTP 6 หล�
 PROMPTPAY_ID = env("PROMPTPAY_ID", default=None)
 PAYMENTS_EXPIRE_MINUTES = env.int('PAYMENTS_EXPIRE_MINUTES', default=15)
 
-OMISE_PUBLIC_KEY = env("OMISE_PUBLIC_KEY", default=None)
-OMISE_SECRET_KEY = env("OMISE_SECRET_KEY", default=None)
-OMISE_WEBHOOK_SECRET = env("OMISE_WEBHOOK_SECRET", default=None)
+STRIPE_PUBLIC_KEY = env("STRIPE_PUBLIC_KEY", default=None)
+STRIPE_SECRET_KEY = env("STRIPE_SECRET_KEY", default=None)
+STRIPE_WEBHOOK_SECRET = env("STRIPE_WEBHOOK_SECRET", default=None)
 
 # -------------------------------------------------
 # INTERNATIONALIZATION

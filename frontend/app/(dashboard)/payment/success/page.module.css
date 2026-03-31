@@ -1,0 +1,208 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+  max-width: 100%;
+  margin: 0 auto;
+  color: #f0efe9;
+  position: relative;
+  overflow: hidden;
+}
+
+.glowBg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(99, 102, 241, 0.12) 0%,
+    rgba(168, 85, 247, 0.08) 50%,
+    transparent 100%
+  );
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.contentCard {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 440px;
+
+  background: rgba(15, 15, 15, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  backdrop-filter: blur(20px);
+  border-radius: 32px;
+  padding: 48px 32px;
+
+  /* เพิ่ม Shadow ให้ดูมีมิติมากขึ้น */
+  box-shadow:
+    0 4px 24px -1px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.stateWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.loaderContainer {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.iconSpin {
+  color: #8b5cf6;
+  animation: spin 2s linear infinite;
+}
+
+.iconSparkle {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: #60a5fa;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.iconCircle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.successCircle {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.errorCircle {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.heroTitle {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(to bottom, #ffffff, #a1a1aa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 12px 0;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.description {
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0;
+}
+
+.divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  margin: 32px 0;
+}
+
+.primaryButton {
+  width: 100%;
+  padding: 16px;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 14px;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.primaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(255, 255, 255, 0.2);
+}
+
+.primaryButton:active {
+  transform: translateY(0);
+}
+
+.ghostButton {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+  margin-top: 24px;
+}
+
+.ghostButton:hover {
+  color: #ffffff;
+}
+
+.fadeIn {
+  animation: fadeInScale 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { clientFetch } from "@/lib/client-fetch";
-import { Zap, Users, RefreshCw } from "lucide-react";
+import { Zap, Users, RefreshCw, DollarSign } from "lucide-react"; // เพิ่ม DollarSign
 import styles from "./page.module.css";
 
 /* ── API ── */
@@ -26,10 +26,14 @@ export default function MainDashboard() {
   });
 
   const stats = data?.stats ?? {};
-  const history = data?.credit_usage_history ?? [];
-  const chartData = history.map((d: any) => d.total);
+  const creditHistory = data?.credit_usage_history ?? [];
+  const incomesHistory = data?.incomes_history ?? [];
 
-  const chartMax = Math.max(...chartData, 1);
+  const chartCreditData = creditHistory.map((d: any) => d.total);
+  const chartIncomeData = incomesHistory.map((d: any) => d.total);
+
+  const chartCreditMax = Math.max(...chartCreditData, 1);
+  const chartIncomeMax = Math.max(...chartIncomeData, 1);
 
   return (
     <div className={styles.page}>
@@ -38,9 +42,7 @@ export default function MainDashboard() {
         <div className={styles.header_text}>
           <p className={styles.eyebrow}>ADMIN CONSOLE</p>
           <h1 className={styles.title}>Overview Dashboard</h1>
-          <p className={styles.subtitle}>
-            System-wide credit usage & analytics
-          </p>
+          <p className={styles.subtitle}>System-wide analytics & revenue</p>
         </div>
         <div className={styles.header_button}>
           <button
@@ -53,7 +55,7 @@ export default function MainDashboard() {
         </div>
       </header>
 
-      {/* KPI Row — only 2 real stats */}
+      {/* KPI Row — 3 stats now */}
       <div className={styles.kpiGrid}>
         {[
           {
@@ -63,6 +65,14 @@ export default function MainDashboard() {
             label: "Total Credits Used",
             value: fmt(stats.total_credits_used ?? 0),
             sub: "All time",
+          },
+          {
+            icon: DollarSign,
+            color: "#f59e0b",
+            bg: "rgba(245,158,11,0.1)",
+            label: "Total Incomes",
+            value: `฿${fmt(stats.total_incomes ?? 0)}`,
+            sub: "Gross Revenue",
           },
           {
             icon: Users,
@@ -86,68 +96,94 @@ export default function MainDashboard() {
         ))}
       </div>
 
-      {/* Credit Usage Chart — full width */}
-      <div className={styles.chartCard}>
-        <div className={styles.chartHead}>
-          <div>
-            <p className={styles.chartLabel}>Credits Usage History</p>
-            <p className={styles.chartSub}>Last 7 days</p>
-          </div>
-          <div className={styles.chartBadge}>LIVE</div>
-        </div>
-
-        <div className={styles.chartArea}>
-          {/* Y axis labels */}
-          <div className={styles.yAxis}>
-            {[chartMax, Math.round(chartMax / 2), 0].map((v, i) => (
-              <span key={`${v}-${i}`} className={styles.yLabel}>
-                {fmt(v)}
-              </span>
-            ))}
+      {/* --- Charts Section --- */}
+      <div className={styles.chartsStack}>
+        {/* 1. Credit Usage Chart */}
+        <div className={styles.chartCard}>
+          <div className={styles.chartHead}>
+            <div>
+              <p className={styles.chartLabel}>Credits Usage History</p>
+              <p className={styles.chartSub}>Last 7 days usage</p>
+            </div>
+            <div className={`${styles.chartBadge} ${styles.blueBadge}`}>
+              LIVE
+            </div>
           </div>
 
-          {/* Bars */}
-          <div className={styles.bars}>
-            {chartData.map((val: number, i: number) => {
-              const pct = chartMax > 0 ? (val / chartMax) * 100 : 0;
-              return (
-                <div key={i} className={styles.barCol}>
-                  <div className={styles.barTrack}>
-                    <div
-                      className={styles.barFill}
-                      style={{ height: `${pct}%` }}
-                    >
-                      <div className={styles.barGlow} />
+          <div className={styles.chartArea}>
+            <div className={styles.yAxis}>
+              {[chartCreditMax, Math.round(chartCreditMax / 2), 0].map(
+                (v, i) => (
+                  <span key={i} className={styles.yLabel}>
+                    {fmt(v)}
+                  </span>
+                ),
+              )}
+            </div>
+            <div className={styles.bars}>
+              {chartCreditData.map((val: number, i: number) => {
+                const pct = (val / chartCreditMax) * 100;
+                return (
+                  <div key={i} className={styles.barCol}>
+                    <div className={styles.barTrack}>
+                      <div
+                        className={styles.barFill}
+                        style={{ height: `${pct}%`, background: "#3b82f6" }}
+                      >
+                        <div className={styles.barGlow} />
+                      </div>
                     </div>
+                    <span className={styles.barDay}>{DAYS[i]}</span>
                   </div>
-                  <span className={styles.barDay}>{DAYS[i]}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <div className={styles.chartFooter}>
-          <div className={styles.chartStat}>
-            <span className={styles.chartStatLabel}>PEAK</span>
-            <span className={styles.chartStatVal} style={{ color: "#3b82f6" }}>
-              {fmt(Math.max(...chartData, 0))} Credits
-            </span>
+        {/* 2. Incomes History Chart */}
+        <div className={styles.chartCard}>
+          <div className={styles.chartHead}>
+            <div>
+              <p className={styles.chartLabel}>Incomes History</p>
+              <p className={styles.chartSub}>Last 7 days revenue</p>
+            </div>
+            <div className={`${styles.chartBadge} ${styles.goldBadge}`}>
+              REVENUE
+            </div>
           </div>
-          <div className={styles.chartDivider} />
-          <div className={styles.chartStat}>
-            <span className={styles.chartStatLabel}>DAILY AVG</span>
-            <span className={styles.chartStatVal} style={{ color: "#a78bfa" }}>
-              {fmt(
-                chartData.length
-                  ? Math.round(
-                      chartData.reduce((a: number, b: number) => a + b, 0) /
-                        chartData.length,
-                    )
-                  : 0,
-              )}{" "}
-              Credits
-            </span>
+
+          <div className={styles.chartArea}>
+            <div className={styles.yAxis}>
+              {[chartIncomeMax, Math.round(chartIncomeMax / 2), 0].map(
+                (v, i) => (
+                  <span key={i} className={styles.yLabel}>
+                    {fmt(v)}
+                  </span>
+                ),
+              )}
+            </div>
+            <div className={styles.bars}>
+              {chartIncomeData.map((val: number, i: number) => {
+                const pct = (val / chartIncomeMax) * 100;
+                return (
+                  <div key={i} className={styles.barCol}>
+                    <div className={styles.barTrack}>
+                      <div
+                        className={styles.barFill}
+                        style={{ height: `${pct}%`, background: "#f59e0b" }}
+                      >
+                        <div
+                          className={styles.barGlow}
+                          style={{ background: "rgba(245,158,11,0.5)" }}
+                        />
+                      </div>
+                    </div>
+                    <span className={styles.barDay}>{DAYS[i]}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

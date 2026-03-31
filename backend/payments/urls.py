@@ -20,6 +20,7 @@ urlpatterns = [
     # ── Credit Logs ───────────────────────────────────────
     path("my-credit-logs/", views.my_credit_logs, name="my_credit_logs"),
 
-    # ── Omise Webhook ─────────────────────────────────────
-    path("webhook/omise/", views.omise_webhook, name="omise_webhook"),
+    # ── Stripe Webhook ─────────────────────────────────────
+    path("webhook/stripe/", views.stripe_webhook, name="stripe_webhook"),
+    path("webhook/stripe/verify_session", views.verify_session, name="verify_session"),
 ]
