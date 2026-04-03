@@ -1,125 +1,43 @@
 services:
-
-  db:
-    image: postgres:16-alpine
-    container_name: ngenerate_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: ngenerate_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     container_name: ngenerate_backend
     restart: unless-stopped
     env_file: ./backend/.env
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
-      - ./backend:/app
-      - storage_data:/app/storage
+      - /workspace/ngenerate:/app/storage
+
+    network_mode: "host" 
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     command: >
       sh -c "python manage.py migrate --noinput &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py runserver 0.0.0.0:8001" 
 
   celery_default:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ngenerate_celery_default
-    restart: unless-stopped
+    build: ./backend
+    network_mode: "host"
     env_file: ./backend/.env
     volumes:
-      - ./backend:/app
-      - storage_data:/app/storage
+      - /workspace/ngenerate:/app/storage
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      celery -A ngenerate worker
-      -Q analysis_queue,upload_queue,fix_text_queue
-      --loglevel=info
-      --concurrency=2
-      -n worker_default@%h
-
-  celery_generation:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ngenerate_celery_generation
-    restart: unless-stopped
-    env_file: ./backend/.env
-    volumes:
-      - ./backend:/app
-      - storage_data:/app/storage
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      celery -A ngenerate worker
-      -Q generation_queue
-      --loglevel=info
-      --concurrency=1
-      -n worker_generation@%h
+    command: celery -A ngenerate worker -Q analysis_queue,upload_queue,fix_text_queue --loglevel=info --concurrency=2
 
   frontend:
-    image: node:20-alpine
+    build: ./frontend
     container_name: ngenerate_frontend
-    working_dir: /app
+    network_mode: "host"
     restart: unless-stopped
     env_file: ./frontend/.env
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - node_modules:/app/node_modules
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-      - NEXT_DISABLE_TURBOPACK=1
-    command: sh -c "npm install && npm run dev"
-    depends_on:
-      - backend
-
-volumes:
-  postgres_data:
-  redis_data:
-  storage_data:
-  node_modules:
