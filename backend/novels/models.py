@@ -154,32 +154,6 @@ class Novel(models.Model):
             return created
         return []
 
-    # @transaction.atomic
-    # def bulk_add_chapters(self, chapters_data: list):
-    #     last_chapter = self.chapters.order_by("order").last()
-    #     current_order = last_chapter.order if last_chapter else 0
-
-    #     new_chapters = []
-    #     for content in chapters_data:
-    #         current_order += 1
-    #         generate_title = f"{self.title}#{current_order}"
-    #         new_chapters.append(
-    #             Chapter(
-    #                 novel=self, 
-    #                 order=current_order, 
-    #                 title=generate_title, 
-    #                 story=content
-    #             )
-    #         )
-        
-    #     # เพิ่มบรรทัดนี้ครับ!
-    #     if new_chapters:
-    #         created_chapters = Chapter.objects.bulk_create(new_chapters)
-    #         self.updated_at = timezone.now()
-    #         self.save(update_fields=["updated_at"])
-    #         return created_chapters
-    #     return []
-
 
 class Chapter(models.Model):
     novel = models.ForeignKey(Novel, on_delete=models.CASCADE, related_name="chapters")

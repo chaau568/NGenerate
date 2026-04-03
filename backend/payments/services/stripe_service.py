@@ -31,8 +31,8 @@ class StripeService:
                 "transaction_id": transaction.id,
                 "payment_ref": transaction.payment_ref,
             },
-            success_url=f"{settings.SITE_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{settings.SITE_URL}/package",
+            success_url=f"{settings.SITE_FRONT_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{settings.SITE_FRONT_URL}/package",
         )
 
         return {

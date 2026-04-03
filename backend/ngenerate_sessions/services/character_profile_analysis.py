@@ -1,39 +1,25 @@
+# character_profile_analysis.py
 import json
 import re
 import requests
+from collections import Counter
 from typing import Dict, List
 
 
 class CharacterProfileAnalysis:
-    """
-    วิเคราะห์ตัวละครจากเนื้อหา novel แบบ 3-pass
 
-    Pass 1 — Name Detection:
-        ดึงชื่อตัวละครจากแต่ละ chunk
-        (exclude สัตว์, บุคคลประวัติศาสตร์, คนไม่มีชื่อ)
-
-    Pass 2 — Deduplication + Filter:
-        LLM รับ name list ทั้งหมด แล้ว:
-        - group ชื่อที่อ้างถึงคนเดียวกัน (เลือกชื่อหลัก)
-        - กรองสัตว์ / ไม่ใช่คนออก
-        → ได้ canonical name list ที่สะอาด
-
-    Pass 3 — Describe Each Character:
-        วิเคราะห์รายละเอียดของตัวละครแต่ละคน
-        (sex detection จาก context keyword)
-    """
-
-    CHUNK_SIZE = 6000
+    CHUNK_SIZE = 5000
+    MIN_FREQUENCY = 2
 
     def __init__(self, ai_api_url: str, timeout: int):
         self.ai_api_url = ai_api_url
         self.timeout = timeout
 
-    # --------------------------------------------------
+    # =========================================================
     # HELPERS
-    # --------------------------------------------------
+    # =========================================================
 
-    def _llm(self, prompt: str, temperature: float = 0.3) -> str:
+    def _llm(self, prompt: str, temperature: float = 0.2) -> str:
         payload = {
             "prompt": prompt,
             "options": {
@@ -43,17 +29,14 @@ class CharacterProfileAnalysis:
             },
         }
         response = requests.post(
-            f"{self.ai_api_url}/llm/generate",
-            json=payload,
-            timeout=self.timeout,
+            f"{self.ai_api_url}/llm/generate", json=payload, timeout=self.timeout
         )
         response.raise_for_status()
         return response.json().get("response", "").strip()
 
     def _extract_json_object(self, text: str) -> dict:
         text = re.sub(r"```(?:json)?", "", text).strip()
-        start = text.find("{")
-        end = text.rfind("}")
+        start, end = text.find("{"), text.rfind("}")
         if start == -1 or end == -1:
             return {}
         try:
@@ -88,11 +71,12 @@ class CharacterProfileAnalysis:
             start = cut + 1
         return chunks
 
-    def _find_character_passages(self, text: str, name: str, window: int = 800) -> str:
+    def _find_passages(
+        self, text: str, name: str, n: int = 3, window: int = 600
+    ) -> str:
         passages = []
         pos = 0
-        count = 0
-        while count < 3:
+        while len(passages) < n:
             idx = text.find(name, pos)
             if idx == -1:
                 break
@@ -100,197 +84,307 @@ class CharacterProfileAnalysis:
             e = min(len(text), idx + window // 2)
             passages.append(text[s:e])
             pos = idx + len(name)
-            count += 1
-        return "\n...\n".join(passages) if passages else text[:1500]
+        return "\n...\n".join(passages) if passages else text[:1200]
 
-    # --------------------------------------------------
-    # PASS 1: DETECT CHARACTER NAMES (ต่อ chunk)
-    # --------------------------------------------------
+    # =========================================================
+    # PASS 1: LENIENT NAME EXTRACTION
+    # =========================================================
 
-    def _detect_names_from_chunk(self, chunk: str) -> List[str]:
-        prompt = f"""Read the story below. List named HUMAN characters only.
+    def _extract_candidates_from_chunk(self, chunk: str, chunk_idx: int) -> List[str]:
+        prompt = f"""Read the Thai novel excerpt below and extract ALL possible character names.
 
-        STRICT RULES — exclude ALL of these:
-        - Animals, horses, pets (e.g. มาหวงเปียว is a horse → exclude)
-        - Historical/legendary figures only mentioned in backstory (not present in the scene)
-        - Unnamed people ("the man", "a villager", ชายแปลกหน้า, นักเดินทาง)
-        - Place names, organization names, sect names (สำนัก, พรรค)
-        - Objects or titles without a personal name attached
+CONTEXT: This is a Chinese-style martial arts / cultivation novel translated into Thai.
+Character names are often multi-syllable Thai transliterations of Chinese names,
+such as "หวังทวนเหล็ก", "หานลี่", "เกาต้าเพิง", "ที่ปรึกษาโจว".
+These look like Thai words but ARE personal names of characters.
 
-        INCLUDE only characters who:
-        - Have a proper name (given name, nickname, or title+name)
-        - Actually appear or speak in the story
+RULES:
+1. Include EVERY string that might be a person's name or title+name:
+   - Chinese-style names: "หวังทวนเหล็ก", "หานลี่", "เกาต้าเพิง"
+   - Title+name combos: "ที่ปรึกษาโจว", "พ่อบ้านหวัง", "ฮูหยิน"
+   - Kinship terms used as names: "พ่อ", "แม่", "อาสาม"
+   - Epithets: "ผู้อาวุโส", "เทพขับเคลื่อน"
+2. When unsure — INCLUDE IT. We filter later.
+3. DO NOT include: place names (แม่น้ำซุ่น), weapon names (ทวนเหล็ก alone), 
+   organization names (สำนักเส้าหลิน), abstract concepts.
+4. Keep names EXACTLY as written in Thai script.
 
-        Example output:
-        ["หานลี่", "อาสาม", "พ่อ"]
+Story excerpt:
+\"\"\"{chunk}\"\"\"
 
-        Story:
-        \"\"\"{chunk}\"\"\"
-
-        Return JSON array only:"""
+Return JSON array of name strings only. No explanation.
+Example: ["หวังทวนเหล็ก", "หานลี่", "ที่ปรึกษาโจว", "เกาต้าเพิง", "ผู้อาวุโส"]"""
 
         try:
-            raw = self._llm(prompt, temperature=0.2)
+            raw = self._llm(prompt, temperature=0.15)
             names = self._extract_json_array(raw)
-            return [n for n in names if isinstance(n, str) and 1 < len(n) <= 40]
+            valid = [n for n in names if isinstance(n, str) and 1 < len(n) <= 40]
+            print(f"   Chunk {chunk_idx}: found {len(valid)} candidates: {valid}")
+            return valid
         except Exception as e:
-            print(f"⚠ Name detection error: {e}")
+            print(f"⚠ Pass1 chunk {chunk_idx} error: {e}")
             return []
 
-    def _detect_all_raw_names(self, text: str) -> List[str]:
+    def _pass1_extract_all_candidates(self, text: str) -> List[str]:
         chunks = self._chunk_text(text)
-        all_names: set = set()
-        for chunk in chunks:
-            names = self._detect_names_from_chunk(chunk)
-            all_names.update(names)
-        return list(all_names)
+        seen: set = set()
+        result: List[str] = []
+        for i, chunk in enumerate(chunks):
+            for name in self._extract_candidates_from_chunk(chunk, i + 1):
+                if name not in seen:
+                    seen.add(name)
+                    result.append(name)
+        print(f"   Total unique candidates: {len(result)}")
+        return result
 
-    # --------------------------------------------------
-    # PASS 2: DEDUPLICATION + FILTER
-    # ปัญหาเดิม: "พอ"/"พ่อ", "อาสาม"/"เจาอวนหาน" ถูกนับแยก
-    # --------------------------------------------------
+    # =========================================================
+    # PASS 2: FREQUENCY COUNT (programmatic)
+    # BUG FIX: ใช้ word-boundary aware matching เพื่อป้องกัน
+    # "แม่" matching กับ "แม่น้ำ"
+    # =========================================================
 
-    def _dedup_names(self, names: List[str], story_text: str) -> Dict[str, List[str]]:
+    def _count_as_standalone(self, text: str, name: str) -> int:
         """
-        ส่ง name list ทั้งหมดให้ LLM ตรวจว่าชื่อไหนอ้างถึงคนเดียวกัน
-        คืน dict: { canonical_name: [alias1, alias2, ...] }
+        นับจำนวนครั้งที่ name ปรากฏในฐานะ standalone word
+        ไม่ใช่ substring ของคำอื่น
+
+        เช่น "แม่" ไม่ควร match กับ "แม่น้ำ"
+        แต่ "หวังทวนเหล็ก" ควร match ปกติ
         """
-        if not names:
+        # สำหรับชื่อยาว (>= 4 ตัวอักษร) ใช้ exact substring ได้เลย
+        # เพราะโอกาสที่จะเป็น substring ของคำอื่นน้อยมาก
+        if len(name) >= 4:
+            return text.count(name)
+
+        # สำหรับชื่อสั้น (2-3 ตัวอักษร) ต้องระวัง false positive
+        # ใช้ negative lookaround — อย่านับถ้าตามด้วยอักขระไทยอื่น
+        # ที่มักเป็นส่วนของคำ (เช่น แม่น้ำ, พ่อค้า)
+        EXTEND_CHARS = set("น้ำคาบ้านครัวยายปู่")  # ตัวอย่างที่มักต่อกับ แม่/พ่อ
+
+        # วิธีง่ายกว่า: นับเฉพาะตำแหน่งที่ตามด้วย space, punctuation หรือ end
+        # หรือตามด้วยตัวอักษรไทยที่เริ่มคำใหม่
+        count = 0
+        pos = 0
+        name_len = len(name)
+        while True:
+            idx = text.find(name, pos)
+            if idx == -1:
+                break
+            end_idx = idx + name_len
+            if end_idx < len(text):
+                next_char = text[end_idx]
+                is_thai_continuation = (
+                    "\u0e00" <= next_char <= "\u0e7f"
+                    and next_char not in "กขคฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ"
+                )
+                compound_check = text[idx : end_idx + 3]
+                known_non_names = [
+                    "แม่น้ำ",
+                    "แม่ทัพ",
+                    "แม่บ้าน",
+                    "แม่ครัว",
+                    "แม่มด",
+                    "พ่อค้า",
+                    "พ่อบ้าน",
+                ]
+                if any(
+                    nw.startswith(text[idx : end_idx + len(nw) - name_len])
+                    and text[idx:].startswith(nw)
+                    for nw in known_non_names
+                ):
+                    pos = end_idx
+                    continue
+            count += 1
+            pos = end_idx
+        return count
+
+    def _pass2_count_frequencies(
+        self, candidates: List[str], text: str
+    ) -> Dict[str, int]:
+        freq: Dict[str, int] = {}
+        for name in candidates:
+            count = self._count_as_standalone(text, name)
+            if count >= self.MIN_FREQUENCY:
+                freq[name] = count
+
+        freq = dict(sorted(freq.items(), key=lambda x: x[1], reverse=True))
+        print(
+            f"   Candidates after frequency filter (>={self.MIN_FREQUENCY}): {len(freq)}"
+        )
+        print(f"   Top 15: { {k: v for k, v in list(freq.items())[:15]} }")
+        return freq
+
+    # =========================================================
+    # PASS 3: LLM FILTER + DEDUP
+    # =========================================================
+
+    def _get_context_snippet(self, text: str, name: str, window: int = 150) -> str:
+        idx = text.find(name)
+        if idx == -1:
+            return ""
+        s = max(0, idx - window // 2)
+        e = min(len(text), idx + window // 2)
+        return text[s:e].replace("\n", " ")
+
+    def _pass3_filter_and_dedup(
+        self, freq_map: Dict[str, int], story_text: str
+    ) -> Dict[str, List[str]]:
+        if not freq_map:
             return {}
 
-        names_str = json.dumps(names, ensure_ascii=False)
+        suspect_names = [n for n, c in freq_map.items() if c <= 5 or len(n) <= 4]
+        snippets = {
+            name: self._get_context_snippet(story_text, name)
+            for name in suspect_names[:25]
+            if self._get_context_snippet(story_text, name)
+        }
 
-        # ส่ง passage สั้นๆ ของแต่ละชื่อเพื่อให้ LLM มี context
-        # จำกัดไม่ให้ prompt ยาวเกิน
-        context_snippets = {}
-        for name in names:
-            idx = story_text.find(name)
-            if idx != -1:
-                s = max(0, idx - 150)
-                e = min(len(story_text), idx + 150)
-                context_snippets[name] = story_text[s:e]
-
-        context_str = "\n".join(
-            f"- {n}: ...{snippet}..."
-            for n, snippet in list(context_snippets.items())[:25]
+        freq_json = json.dumps(freq_map, ensure_ascii=False, indent=2)
+        snippets_str = "\n".join(
+            f'  "{name}" ({freq_map[name]}x): "...{snip}..."'
+            for name, snip in snippets.items()
         )
 
-        prompt = f"""You have a list of names extracted from a Thai novel.
-        Some names may refer to the same character (nicknames, titles, aliases).
+        prompt = f"""You are processing character names from a Thai-translated Chinese martial arts novel.
 
-        Your tasks:
-        1. GROUP names that refer to the same person → pick the most complete/common name as canonical
-        2. DO NOT remove any names.
-        3. If a name might be non-human, keep it but mark it as uncertain.
-        4. REMOVE duplicates
+        Name list with frequency counts (how many times each appears in the story):
+        {freq_json}
 
-        Name list:
-        {names_str}
+        Context snippets for shorter/ambiguous names:
+        {snippets_str if snippets_str else "(none)"}
 
-        Context snippets:
-        {context_str}
+        YOUR TASKS:
 
-        Rules:
-        - Keep names exactly as written (Thai script)
-        - Each group must represent ONE real human character
-        - If unsure whether two names are the same person, keep them separate
+        1. REMOVE non-character entries:
+        - Animals or mounts (horses, etc.)
+        - Pure place names, river names, sect/organization names
+        - Weapon names used alone (not as part of a person's name)
+        - Abstract concepts
+        
+        KEEP:
+        - All human characters, including servants, guards, advisors
+        - Kinship terms used as character references: "พ่อ", "แม่", "อาสาม"
+        - Title+surname combos like "ที่ปรึกษาโจว" (Advisor Zhou) — these ARE characters
+        - Epithets like "ผู้อาวุโส", "เทพขับเคลื่อน" if they refer to a specific person
+        - ANY name with frequency >= 3 should almost certainly be kept
 
-        Example output:
+        2. GROUP aliases of the same person under one canonical name:
+        - Choose the most complete/specific name as canonical
+        - Example: "หวังทวนเหล็ก", "พ่อบ้านหวัง", "หวัง" → canonical: "หวังทวนเหล็ก"
+        - Only merge if confident — when in doubt, keep separate
+        - Do NOT merge different characters just because they share a surname
+
+        Output format example:
         {{
         "characters": [
-            {{"canonical": "หานลี่", "aliases": ["เจาบื้อที่สอง", "เสี่ยวลี่"]}},
-            {{"canonical": "เจาอวนหาน", "aliases": ["อาสาม"]}},
-            {{"canonical": "พ่อหมื่น", "aliases": []}}
-        ]
+            {{"canonical": "หวังทวนเหล็ก", "aliases": ["พ่อบ้านหวัง", "หวัง"]}},
+            {{"canonical": "ที่ปรึกษาโจว", "aliases": []}},
+            {{"canonical": "เกาต้าเพิง", "aliases": ["น้องเกา"]}},
+            {{"canonical": "ผู้อาวุโส", "aliases": ["เทพขับเคลื่อน"]}}
+        ],
+        "removed": ["มาหวงเปียว (horse)"]
         }}
 
-        Return JSON only:"""
+        Return JSON only. No explanation."""
 
         try:
-            raw = self._llm(prompt, temperature=0.2)
+            raw = self._llm(prompt, temperature=0.15)
             data = self._extract_json_object(raw)
-            characters = data.get("characters", [])
 
-            result = {}
+            characters = data.get("characters", [])
+            removed = data.get("removed", [])
+            print(f"   LLM kept: {len(characters)} characters, removed: {len(removed)}")
+            if removed:
+                print(f"   Removed: {removed[:10]}")
+
+            result: Dict[str, List[str]] = {}
+            seen: set = set()
             for item in characters:
                 canonical = str(item.get("canonical", "")).strip()
-                aliases = [str(a).strip() for a in item.get("aliases", [])]
-                if canonical:
-                    result[canonical] = aliases
+                if not canonical or canonical in seen:
+                    continue
+                aliases = [
+                    str(a).strip() for a in item.get("aliases", []) if str(a).strip()
+                ]
+                result[canonical] = aliases
+                seen.add(canonical)
+
+            all_covered = set(result.keys())
+            for aliases_list in result.values():
+                all_covered.update(aliases_list)
+
+            for name, count in freq_map.items():
+                if count >= 5 and name not in all_covered:
+                    print(
+                        f"   ⚠ Safety net: restoring high-freq name '{name}' (freq={count})"
+                    )
+                    result[name] = []
 
             return result
 
         except Exception as e:
-            print(f"⚠ Dedup error: {e}")
-            # fallback: คืนแต่ละชื่อเป็น canonical ของตัวเอง
-            return {
-                name: [] for name in names
-            }  # ใช้ได้แล้ว แต่ต้อง ensure ว่า names มาจาก raw จริง
+            print(f"⚠ Pass3 error: {e}")
+            return {name: [] for name in freq_map}
 
-    # --------------------------------------------------
-    # PASS 3: DESCRIBE EACH CHARACTER
-    # --------------------------------------------------
+    # =========================================================
+    # PASS 4: DESCRIBE EACH CHARACTER
+    # =========================================================
 
     VALID_AGES = {"child", "teen", "adult", "middle-aged", "elder"}
     VALID_SEXES = {"man", "woman"}
 
-    # keyword ที่บ่งบอกเพศในภาษาไทย — ใช้ให้ LLM hint
-    FEMALE_KEYWORDS = "แม่, แม, นาง, หญิง, สาว, พี่สาว, น้องสาว, อา (ผู้หญิง), ฮูหยิน, นางสาว"
-    MALE_KEYWORDS = "พ่อ, พอ, นาย, ชาย, หนุ่ม, พี่ชาย, น้องชาย, เจ้า, อา (ผู้ชาย)"
+    def _pass4_describe_character(
+        self, name: str, aliases: List[str], passage: str
+    ) -> dict:
+        alias_str = f" (also known as: {', '.join(aliases)})" if aliases else ""
 
-    def _describe_character(self, name: str, aliases: List[str], passage: str) -> dict:
-        alias_str = f" (also called: {', '.join(aliases)})" if aliases else ""
-
-        prompt = f"""You are analyzing a character from a Thai novel.
+        prompt = f"""Analyze this character from a Thai-translated Chinese martial arts novel.
 
         Character: {name}{alias_str}
 
-        Read the passage carefully and fill in the fields below.
-        All field values MUST be in English.
+        Read the passage and fill in ALL fields in ENGLISH.
 
-        CRITICAL — sex field:
-        - Read pronouns, relationships, and descriptions in the passage
-        - Thai male indicators: เขา (he), ชาย, หนุ่ม, นาย, พ่อ, พี่ชาย, น้องชาย, ลุง, อา (uncle)
-        - Thai female indicators: เธอ (she), หญิง, สาว, นาง, แม่, พี่สาว, น้องสาว, ป้า, อา (aunt)
-        - If the passage uses both, trust the majority
-        - Only default to "man" if there is truly NO gender information at all
+        SEX DETECTION (critical):
+        - Look for pronouns, relationships, physical descriptions
+        - Thai male indicators: เขา (he/him), ชาย, หนุ่ม, นาย, พ่อ, พี่ชาย, น้องชาย, ลุง
+        - Thai female indicators: เธอ (she/her), หญิง, สาว, นาง, แม่, พี่สาว, น้องสาว, ป้า, ฮูหยิน (noblewoman)
+        - Majority rules if mixed signals
+        - Default "man" ONLY if truly no gender clues
 
-        Fields:
-        - appearance: physical description (hair, eyes, skin, build). Default: "not described"
-        - outfit: clothing in the story. Default: "simple casual clothing"
+        FIELDS (all values must be in English):
+        - appearance: hair, eyes, skin tone, build, distinguishing features. Default: "not described"
+        - outfit: clothing described in the story. Default: "simple clothing"  
         - sex: "man" or "woman"
         - age: "child" / "teen" / "adult" / "middle-aged" / "elder". Default: "adult"
         - race: ethnicity or fantasy race. Default: "human"
-        - base_personality: 1-3 short English traits. Default: "neutral"
-
-        Example output:
-        {{
-        "name": "หานลี่",
-        "appearance": "dark skin, thin build, short black hair, young face",
-        "outfit": "simple rural clothing",
-        "sex": "man",
-        "age": "child",
-        "race": "human",
-        "base_personality": "curious, determined, mature for his age"
-        }}
+        - base_personality: 1-3 English trait words. Default: "neutral"
 
         Passage:
         \"\"\"{passage}\"\"\"
 
-        Return JSON only:"""
+        Return JSON only:
+        {{"name": "{name}", "appearance": "...", "outfit": "...", "sex": "...", "age": "...", "race": "...", "base_personality": "..."}}"""
 
         try:
-            raw = self._llm(prompt, temperature=0.3)
+            raw = self._llm(prompt, temperature=0.25)
             data = self._extract_json_object(raw)
-            if not data or not data.get("name"):
-                data["name"] = name
             return self._clean_profile(data, name)
         except Exception as e:
-            print(f"⚠ Character describe error [{name}]: {e}")
+            print(f"⚠ Pass4 describe error [{name}]: {e}")
             return self._default_profile(name)
 
+    # =========================================================
+    # PROFILE HELPERS
+    # =========================================================
+
     def _clean_profile(self, data: dict, canonical_name: str) -> dict:
-        name = canonical_name  # ใช้ canonical name เสมอ ไม่ใช้จาก LLM response
+        def clean_str(val, default):
+            v = str(val or "").strip()
+            return (
+                default
+                if not v or v.lower() in {"unknown", "none", "not mentioned", "n/a", ""}
+                else v
+            )
 
         sex = str(data.get("sex", "man")).lower().strip()
         if sex not in self.VALID_SEXES:
@@ -300,92 +394,84 @@ class CharacterProfileAnalysis:
         if age not in self.VALID_AGES:
             age = "adult"
 
-        appearance = str(data.get("appearance", "")).strip()
-        if not appearance or appearance.lower() in {"unknown", "not mentioned", "none"}:
-            appearance = "not described"
-
-        outfit = str(data.get("outfit", "")).strip()
-        if not outfit or outfit.lower() in {"unknown", "none", "not mentioned"}:
-            outfit = "simple casual clothing"
-
-        race = str(data.get("race", "human")).strip()
-        if not race or race.lower() == "unknown":
-            race = "human"
-
-        personality = str(data.get("base_personality", "neutral")).strip()
-        if not personality or personality.lower() == "unknown":
-            personality = "neutral"
-
         return {
-            "name": name,
-            "appearance": appearance,
-            "outfit": outfit,
+            "name": canonical_name,
+            "appearance": clean_str(data.get("appearance"), "not described"),
+            "outfit": clean_str(data.get("outfit"), "simple clothing"),
             "sex": sex,
             "age": age,
-            "race": race,
-            "base_personality": personality,
+            "race": clean_str(data.get("race"), "human"),
+            "base_personality": clean_str(data.get("base_personality"), "neutral"),
         }
 
     def _default_profile(self, name: str) -> dict:
         return {
             "name": name,
             "appearance": "not described",
-            "outfit": "simple casual clothing",
+            "outfit": "simple clothing",
             "sex": "man",
             "age": "adult",
             "race": "human",
             "base_personality": "neutral",
         }
 
-    # --------------------------------------------------
+    # =========================================================
     # PUBLIC ENTRY POINT
-    # --------------------------------------------------
+    # =========================================================
 
     def run(self, story_text: str) -> Dict:
-        """
-        วิเคราะห์ตัวละครทั้งหมดจาก story_text แบบ 3-pass
-
-        Returns:
-            {"character_profile": [...], "alias_map": {canonical: [aliases]}}
-        """
-        print("🔍 Pass 1: Detecting character names...")
-        raw_names = self._detect_all_raw_names(story_text)
-        print(f"   Raw names ({len(raw_names)}): {raw_names}")
+        print("🔍 Pass 1: Extracting name candidates (lenient)...")
+        raw_names = self._pass1_extract_all_candidates(story_text)
+        print(f"   Raw candidates: {raw_names}")
 
         if not raw_names:
-            return {"character_profile": [], "alias_map": {}}
+            return {
+                "character_profile": [],
+                "alias_map": {},
+                "raw_names": [],
+                "frequency_map": {},
+            }
 
-        print("🔗 Pass 2: Deduplicating and filtering...")
-        canonical_map = self._dedup_names(raw_names, story_text)
+        print("📊 Pass 2: Counting frequencies (word-boundary aware)...")
+        freq_map = self._pass2_count_frequencies(raw_names, story_text)
+
+        if not freq_map:
+            print("⚠ No names passed frequency filter")
+            return {
+                "character_profile": [],
+                "alias_map": {},
+                "raw_names": raw_names,
+                "frequency_map": {},
+            }
+
+        print("🔗 Pass 3: LLM filter + dedup...")
+        canonical_map = self._pass3_filter_and_dedup(freq_map, story_text)
         print(
-            f"   Canonical characters ({len(canonical_map)}): {list(canonical_map.keys())}"
+            f"   Final characters ({len(canonical_map)}): {list(canonical_map.keys())}"
         )
 
-        print("📝 Pass 3: Describing each character...")
+        print("📝 Pass 4: Describing each character...")
         profiles = []
-
         for canonical_name, aliases in canonical_map.items():
-            # หา passage จากทั้ง canonical name และ aliases
-            search_names = [canonical_name] + aliases
             all_passages = []
-            for search_name in search_names:
-                p = self._find_character_passages(story_text, search_name)
+            for search_name in [canonical_name] + aliases:
+                p = self._find_passages(story_text, search_name)
                 if p:
                     all_passages.append(p)
+            combined_passage = "\n...\n".join(all_passages)[:2500]
 
-            # รวม passages (ไม่ให้ยาวเกิน 2000 chars)
-            combined_passage = "\n...\n".join(all_passages)[:2000]
-
-            profile = self._describe_character(
+            profile = self._pass4_describe_character(
                 canonical_name, aliases, combined_passage
             )
             profiles.append(profile)
+            freq = freq_map.get(canonical_name, 0)
             print(
-                f"   ✓ {canonical_name} (aliases: {aliases}) → {profile['sex']}, {profile['age']}"
+                f"   ✓ {canonical_name} (freq={freq}, aliases={aliases}) → sex={profile['sex']}, age={profile['age']}"
             )
 
         return {
             "character_profile": profiles,
             "alias_map": canonical_map,
-            "raw_names": raw_names,  # ⭐ สำคัญ
+            "raw_names": raw_names,
+            "frequency_map": freq_map,
         }

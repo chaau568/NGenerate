@@ -99,9 +99,13 @@ def create_session(request, novel_id):
             ordered = chapters.order_by("order")
             first = ordered.first()
             last = ordered.last()
-            session.name = (
-                f"Session: {novel.title} chapter#{first.order} - chapter#{last.order}"
-            )[:255]
+            if len(chapters) == 1:
+                session.name = f"Session: {novel.title} chapter#{first.order}"[:255]
+            else:
+                session.name = (
+                    f"Session: {novel.title} chapter#{first.order} - chapter#{last.order}"
+                )[:255]
+                
             session.save(update_fields=["name"])
 
     return Response(

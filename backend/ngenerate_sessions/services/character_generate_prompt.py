@@ -11,10 +11,10 @@ class GenerateCharacterPrompt:
         self.timeout = timeout
 
         self.__FRAMING_TAGS = (
-            "full head visible, head fully in frame, "
-            "portrait, solo, "
-            "looking at viewer, facing viewer, front view, "
-            "centered"
+            "upper body, half body, "
+            "solo, looking at viewer, facing viewer, front view, "
+            "centered, "
+            "head visible, neck visible, shoulders visible, arms visible, hands visible"
         )
 
         self.__FIXED_SUFFIX = "white background, simple background, isolated"
@@ -27,8 +27,9 @@ class GenerateCharacterPrompt:
             "text, watermark, logo, "
             "background scenery, landscape, city, forest, "
             "(cropped head:1.5), (head cut off:1.5), (head out of frame:1.5), "
-            "(missing head:1.5), partial head, cut forehead, "
-            "close-up face only, headshot without shoulders"
+            "(cropped hands:1.3), (hands cut off:1.3), (arms cut off:1.3), "
+            "full body, wide shot, feet visible, shoes visible, "
+            "out of frame, cropped, cut off"
         )
 
     # --------------------------------------------------
@@ -97,14 +98,6 @@ class GenerateCharacterPrompt:
         return self.__FIXED_NEGATIVE_BASE
 
     def _build_expression_tags(self, sc) -> tuple[str, str]:
-        """
-        แยก expression_tags เป็น 2 ส่วน:
-            action_tags  — การกระทำ + pose (ใส่ weight สูง)
-            emotion_tags — สีหน้า/อารมณ์
-
-        คืน (action_tags, emotion_tags) แยกกัน
-        เพื่อให้ generate_scene_prompt นำไปใช้ได้ถูกตำแหน่ง
-        """
         action_parts = []
         emotion_parts = []
 
@@ -117,7 +110,7 @@ class GenerateCharacterPrompt:
             action_parts.append(f"({pose}:1.2)")
 
         if len(action_parts) > 0:
-            action_parts.append("dynamic pose, full body shot")
+            action_parts.append("(upper body:1.3), (half body:1.2), hands visible")
 
         # ── Expression ──
         expr = sc.get("expression", "neutral").strip()
@@ -204,23 +197,6 @@ class GenerateCharacterPrompt:
 
     # --------------------------------------------------
     # METHOD 2: SCENE-AWARE PROMPT
-    #
-    # แก้ปัญหา: ท่าทาง/อาวุธไม่ติด prompt
-    #
-    # สาเหตุเดิม:
-    #   - LLM ถูกขอแค่ "outfit_tags" โดยรับ expression_tags เป็น context
-    #     แต่ prompt ไม่ได้บังคับให้รวมอาวุธ/สิ่งที่ถือไว้ใน tags
-    #   - action_tags ถูก append ท้ายสุดหลัง outfit_tags แต่ถ้า LLM
-    #     generate outfit ไม่มีอาวุธ → ภาพก็ไม่มีอาวุธ
-    #   - _build_expression_tags คืน string เดียวรวม pose+action+expression
-    #     ทำให้ weight ของแต่ละส่วนไม่ชัดเจน
-    #
-    # วิธีแก้:
-    #   1. แยก action_tags และ emotion_tags ออกจากกัน
-    #   2. ส่ง action โดยตรงให้ LLM generate "outfit_and_weapon_tags"
-    #      พร้อมบังคับให้ถ้ามี action ที่ใช้อาวุธ ต้องรวม weapon description
-    #   3. เรียง final prompt ให้ action_tags อยู่หลัง outfit ทันที
-    #      (SD อ่าน token ซ้าย→ขวา น้ำหนักลดลงตามลำดับ)
     # --------------------------------------------------
 
     def generate_scene_prompt(
@@ -311,11 +287,12 @@ class GenerateCharacterPrompt:
             # ── ประกอบ final prompt ──
             # ลำดับสำคัญ: prefix → identity → appearance → outfit/weapon → action → emotion → suffix
             parts = [
+                "upper body, half body, hands visible,",
                 prefix,
                 identity,
                 appearance_anchor,
                 outfit_tags,
-                action_tags,  # pose + action พร้อม weight
+                action_tags,
             ]
             if emotion_tags:
                 parts.append(emotion_tags)

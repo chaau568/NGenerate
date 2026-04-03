@@ -225,7 +225,6 @@ export default function ProjectPage() {
                 <div
                   key={task.session_id}
                   className={styles.runningCard}
-                  onClick={() => router.push(`/project/${task.session_id}`)}
                 >
                   <div className={styles.runningTop}>
                     <div className={styles.runningLeft}>
@@ -241,15 +240,6 @@ export default function ProjectPage() {
                       <span className={styles.runningPct}>
                         {task.progress}%
                       </span>
-                      <button
-                        className={styles.iconBtn}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/project/${task.session_id}`);
-                        }}
-                      >
-                        <Eye size={15} />
-                      </button>
                       <button
                         className={styles.iconBtnDanger}
                         onClick={(e) => {

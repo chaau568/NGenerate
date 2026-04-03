@@ -10,7 +10,7 @@ class SceneAnalysis:
 
     SCENE_CHUNK_SIZE = 20
     MAX_SCENES_PER_CHUNK = 3
-    MIN_SENTENCES_PER_SCENE = 3
+    MIN_SENTENCES_PER_SCENE = 5
 
     def __init__(self, ai_api_url: str, timeout: int):
         self.ai_api_url = ai_api_url
@@ -39,9 +39,9 @@ class SceneAnalysis:
             "wide shot",
         }
 
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
     # HELPERS
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
 
     def _llm(self, prompt: str, temperature: float = 0.5) -> str:
         payload = {
@@ -53,9 +53,7 @@ class SceneAnalysis:
             },
         }
         response = requests.post(
-            f"{self.ai_api_url}/llm/generate",
-            json=payload,
-            timeout=self.timeout,
+            f"{self.ai_api_url}/llm/generate", json=payload, timeout=self.timeout
         )
         response.raise_for_status()
         return response.json().get("response", "").strip()
@@ -72,8 +70,7 @@ class SceneAnalysis:
 
     def _extract_json_object(self, text: str) -> dict:
         text = re.sub(r"```(?:json)?", "", text).strip()
-        start = text.find("{")
-        end = text.rfind("}")
+        start, end = text.find("{"), text.rfind("}")
         if start == -1 or end == -1:
             return {}
         try:
@@ -82,24 +79,16 @@ class SceneAnalysis:
             return {}
 
     def _clean_tags(self, text: str) -> str:
-        """ทำความสะอาด tags และลบ banned tags"""
         if not text:
             return ""
-
         tags = [t.strip() for t in text.replace("\n", " ").split(",") if t.strip()]
-
         clean = []
         for tag in tags:
-            tag_lower = tag.lower()
-            if tag_lower in self.__BANNED_TAGS:
+            if tag.lower() in self.__BANNED_TAGS:
                 continue
             if tag not in clean:
                 clean.append(tag[:50])
-
-        if len(clean) > 35:
-            clean = clean[:35]
-
-        return ", ".join(clean)
+        return ", ".join(clean[:35])
 
     def _build_scene_prefix(self, style: str) -> str:
         config = get_lora_config(style)
@@ -111,9 +100,11 @@ class SceneAnalysis:
     def _build_negative(self, style: str) -> str:
         config = get_lora_config(style)
         score_neg = config.get("score_negative", "")
-        if score_neg:
-            return f"{score_neg}, {self.__FIXED_NEGATIVE_BASE}"
-        return self.__FIXED_NEGATIVE_BASE
+        return (
+            f"{score_neg}, {self.__FIXED_NEGATIVE_BASE}"
+            if score_neg
+            else self.__FIXED_NEGATIVE_BASE
+        )
 
     def _fallback_prompt(self, style: str) -> dict:
         fallback_map = {
@@ -131,42 +122,47 @@ class SceneAnalysis:
             "negative_prompt": self._build_negative(style),
         }
 
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
     # BOUNDARY DETECTION
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
 
     def _detect_scene_boundaries(self, sentences: List[Dict], style: str) -> List[Dict]:
         lines = []
         for s in sentences:
-            short_text = s["text"][:80].replace("\n", " ")
+            short_text = s["text"][:100].replace("\n", " ")
             lines.append(f'{s["sentence_index"]}: {short_text}')
 
         sentence_block = "\n".join(lines)
         first_idx = sentences[0]["sentence_index"]
         last_idx = sentences[-1]["sentence_index"]
 
-        prompt = f"""You are a story scene director.
+        prompt = f"""You are a story scene director reading a Thai novel.
 
-        Split the story sentences below into {self.MAX_SCENES_PER_CHUNK} scenes or fewer.
+        Split the sentences below into scenes based on what ACTUALLY HAPPENS in the text.
 
         Rules:
-        - Each scene must cover a continuous range of sentences
-        - Scenes change when: location changes, time passes, mood shifts significantly
+        - A new scene starts when: physical location changes, significant time passes, or the situation/activity changes clearly
         - Minimum {self.MIN_SENTENCES_PER_SCENE} sentences per scene
+        - Maximum {self.MAX_SCENES_PER_CHUNK} scenes for this chunk
         - sentence_start and sentence_end must be actual sentence indexes from the list
         - Cover ALL sentences: first={first_idx}, last={last_idx}
-        - scene_description: 1 short English phrase describing the environment/setting
+        - scene_description: Write a SHORT phrase (under 10 words) describing the ACTUAL LOCATION and ACTIVITY happening in those sentences. Be specific to the story content — do NOT write generic phrases like "story scene" or "village".
 
-        Example output:
-        [
-        {{"scene_index": 1, "sentence_start": {first_idx}, "sentence_end": {first_idx + 5}, "scene_description": "morning rice field, village path"}},
-        {{"scene_index": 2, "sentence_start": {first_idx + 6}, "sentence_end": {last_idx}, "scene_description": "riverside at sunset, bamboo huts"}}
-        ]
+        Good scene_description examples:
+        "riverbank at night, character falls into water"
+        "bamboo forest path, two characters arguing"
+        "stone training ground, sword practice"
+        "dark cave interior, searching for exit"
+        "crowded market street, midday"
 
         Sentences:
         {sentence_block}
 
-        Return JSON array only:"""
+        Return JSON array only:
+        [
+        {{"scene_index": 1, "sentence_start": {first_idx}, "sentence_end": X, "scene_description": "..."}},
+        ...
+        ]"""
 
         try:
             raw = self._llm(prompt, temperature=0.4)
@@ -236,9 +232,9 @@ class SceneAnalysis:
             scene["scene_index"] = i + 1
         return valid
 
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
     # MERGE SCENES
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
 
     def _merge_chunk_scenes(self, all_chunk_scenes: List[List[Dict]]) -> List[Dict]:
         merged: List[Dict] = []
@@ -273,348 +269,63 @@ class SceneAnalysis:
 
         return collapsed
 
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
     # BACKGROUND PROMPT GENERATION
-    #
-    # แก้ปัญหา: scene prompt ไม่สอดคล้องกับเนื้อเรื่อง
-    #
-    # สาเหตุเดิม:
-    #   - LLM รับแค่ scene_description สั้นๆ (เช่น "morning rice field")
-    #     และ scene_text แต่ prompt ไม่ได้บังคับให้อ่าน "บรรยากาศ" จาก event
-    #   - LLM มักคืน tags สวยงามทั่วไป ("misty morning", "golden light")
-    #     แทนที่จะสะท้อนเหตุการณ์ เช่น ถ้าฉากมีการต่อสู้ก็ควรมี
-    #     "dust cloud", "broken pillars", "scattered debris"
-    #
-    # วิธีแก้:
-    #   1. เพิ่ม "scene_mood" extraction step — ให้ LLM ระบุ mood/event
-    #      จาก scene_text ก่อน แล้วนำไปใช้ใน prompt generation
-    #   2. แยก prompt เป็น 2 ส่วน: environment tags + atmosphere tags
-    #      atmosphere tags มาจาก mood ของ scene จริงๆ
-    #   3. ถ้า scene มี action keywords (fight, battle, run, escape)
-    #      ให้เพิ่ม atmospheric visual cues อัตโนมัติ
-    # --------------------------------------------------
-
-    # Keyword → atmosphere visual cues
-    # ใช้ detect จาก scene_text และ scene_description แล้วเพิ่มเป็น hint ให้ LLM
-    __MOOD_CUES = {
-        "fight": "dust cloud, debris scattered, tense atmosphere, dynamic lighting",
-        "battle": "smoke in air, battle damage, intense lighting, dark clouds",
-        "running": "motion blur trees, kicked up dust, urgent atmosphere",
-        "escape": "shadows, narrow path, urgent lighting, overgrown surroundings",
-        "death": "dim lighting, fallen leaves, somber atmosphere, grey sky",
-        "cry": "rain or mist, soft dim light, lonely atmosphere",
-        "night": "moonlight, stars, lantern glow, deep shadows",
-        "morning": "soft golden light, mist on ground, dew on leaves",
-        "rain": "rain streaks, wet ground, puddles, overcast sky",
-        "fire": "fire glow, ember floating, smoke rising, orange light",
-        "celebration": "lanterns hanging, festive decorations, warm golden light",
-        "training": "training ground, wooden dummies, worn dirt floor, morning mist",
-        "ทวน": "weapon rack nearby, training ground, combat-worn environment",
-        "ดาบ": "weapon rack nearby, combat-worn stone floor",
-        "สู้": "dust cloud, debris, tense atmosphere",
-        "วิ่ง": "kicked up dust, motion blur surroundings",
-        "ร้องไห้": "soft dim light, lonely atmosphere, mist",
-        "ฝึก": "training ground, worn dirt floor, early morning light",
-        "ตาย": "fallen leaves, dim light, somber grey sky",
-    }
-
-    def _extract_scene_mood_cues(self, scene_text: str, scene_description: str) -> str:
-        """
-        ตรวจ scene_text และ scene_description ด้วย keyword matching
-        คืน atmosphere cue string สำหรับใส่เป็น hint ใน LLM prompt
-        """
-        combined = (scene_text + " " + scene_description).lower()
-        found_cues = []
-        seen = set()
-        for keyword, cue in self.__MOOD_CUES.items():
-            if keyword.lower() in combined and cue not in seen:
-                found_cues.append(cue)
-                seen.add(cue)
-        return ", ".join(found_cues[:3])
-
-    # --------------------------------------------------
-    # IMPROVED BACKGROUND PROMPT GENERATION
-    # --------------------------------------------------
-
-    # เพิ่ม keyword mapping สำหรับ scene event detection
-    __EVENT_KEYWORDS = {
-        "combat": {
-            "keywords": [
-                "fight",
-                "battle",
-                "combat",
-                "duel",
-                "struggle",
-                "attack",
-                "defend",
-                "strike",
-                "slash",
-                "punch",
-                "kick",
-                "ต่อสู้",
-                "สู้",
-                "รบ",
-                "ประลอง",
-                "โจมตี",
-            ],
-            "visuals": "battle damage, dust cloud, scattered debris, broken weapons, blood spatter on ground, dramatic shadows",
-        },
-        "training": {
-            "keywords": [
-                "train",
-                "practice",
-                "spar",
-                "exercise",
-                "ฝึก",
-                "ซ้อม",
-                "ฝึกฝน",
-                "ซ้อมต่อสู้",
-            ],
-            "visuals": "training ground, wooden dummies, worn dirt floor, straw targets, sweat drops, morning light",
-        },
-        "meditation": {
-            "keywords": [
-                "meditate",
-                "cultivate",
-                "sit cross-legged",
-                "close eyes",
-                "สมาธิ",
-                "นั่งสมาธิ",
-                "บำเพ็ญ",
-                "ฝึกจิต",
-            ],
-            "visuals": "peaceful atmosphere, soft light rays, incense smoke curling, stone platform, zen garden",
-        },
-        "conversation": {
-            "keywords": [
-                "talk",
-                "speak",
-                "say",
-                "discuss",
-                "whisper",
-                "shout",
-                "พูด",
-                "คุย",
-                "กล่าว",
-                "สนทนา",
-                "กระซิบ",
-            ],
-            "visuals": "intimate atmosphere, warm lighting, focused on speakers, comfortable setting",
-        },
-        "escape": {
-            "keywords": [
-                "run",
-                "escape",
-                "flee",
-                "dash",
-                "sprint",
-                "วิ่ง",
-                "หนี",
-                "หลบหนี",
-                "เร่งรีบ",
-            ],
-            "visuals": "motion blur, kicked up dust, urgent atmosphere, blurred background, speed lines",
-        },
-        "celebration": {
-            "keywords": [
-                "celebrate",
-                "festival",
-                "party",
-                "feast",
-                "joy",
-                "happy",
-                "ฉลอง",
-                "เทศกาล",
-                "งานเลี้ยง",
-                "รื่นเริง",
-            ],
-            "visuals": "lanterns hanging, festive decorations, warm golden light, crowds, colorful banners",
-        },
-        "funeral": {
-            "keywords": [
-                "die",
-                "death",
-                "funeral",
-                "grave",
-                "corpse",
-                "dead",
-                "ตาย",
-                "มรณะ",
-                "ศพ",
-                "งานศพ",
-            ],
-            "visuals": "dim lighting, grey sky, incense smoke, white flowers, somber atmosphere, falling leaves",
-        },
-        "night": {
-            "keywords": [
-                "night",
-                "evening",
-                "dark",
-                "moon",
-                "stars",
-                "midnight",
-                "ค่ำ",
-                "กลางคืน",
-                "มืด",
-                "จันทร์",
-            ],
-            "visuals": "moonlight, starry sky, lantern glow, deep shadows, night atmosphere",
-        },
-        "morning": {
-            "keywords": ["morning", "dawn", "sunrise", "early", "เช้า", "รุ่งอรุณ", "อรุณ"],
-            "visuals": "soft golden light, morning mist, dew on leaves, warm sunrise colors",
-        },
-        "rain": {
-            "keywords": ["rain", "raining", "storm", "wet", "ฝน", "ตก", "พายุ"],
-            "visuals": "rain streaks, wet ground, puddles, overcast sky, water droplets, mist",
-        },
-        "fire": {
-            "keywords": ["fire", "flame", "burn", "blaze", "ไฟ", "เพลิง", "ลุกไหม้"],
-            "visuals": "fire glow, ember floating, smoke rising, orange light, dramatic lighting",
-        },
-    }
-
-    def _extract_scene_events(
-        self, scene_text: str, scene_description: str
-    ) -> Tuple[str, str]:
-        """
-        วิเคราะห์ว่า scene นี้เกิดเหตุการณ์อะไรบ้าง
-        คืน (event_type, visual_cues)
-        """
-        combined = (scene_text + " " + scene_description).lower()
-        detected_events = []
-        visual_cues = []
-
-        for event, data in self.__EVENT_KEYWORDS.items():
-            for keyword in data["keywords"]:
-                if keyword.lower() in combined:
-                    detected_events.append(event)
-                    if data["visuals"] not in visual_cues:
-                        visual_cues.append(data["visuals"])
-                    break
-
-        # หา event ที่สำคัญที่สุด (ลำดับความสำคัญ)
-        priority = [
-            "combat",
-            "escape",
-            "funeral",
-            "celebration",
-            "training",
-            "meditation",
-            "conversation",
-            "fire",
-            "rain",
-            "night",
-            "morning",
-        ]
-
-        primary_event = "neutral"
-        for p in priority:
-            if p in detected_events:
-                primary_event = p
-                break
-
-        visual_str = ", ".join(visual_cues[:3])  # จำกัด 3 cues
-        return primary_event, visual_str
-
-    def _extract_location_from_text(
-        self, scene_text: str, scene_description: str
-    ) -> str:
-        """
-        ดึงข้อมูลสถานที่จากเนื้อหาให้ละเอียดขึ้น
-        """
-        location_keywords = {
-            "temple": ["วัด", "ศาล", "เจดีย์", "พระ", "temple", "shrine", "pagoda"],
-            "forest": ["ป่า", "ดง", "เขา", "forest", "woods", "jungle", "mountain"],
-            "village": ["หมู่บ้าน", "บ้าน", "village", "town", "community", "ไร่", "นา"],
-            "city": ["เมือง", "กรุง", "city", "capital", "town", "ถนน", "ตลาด"],
-            "palace": ["วัง", "พระราชวัง", "palace", "castle", "fortress", "ปราสาท"],
-            "courtyard": ["ลาน", "สนาม", "courtyard", "yard", "court", "ลานกว้าง"],
-            "room": ["ห้อง", "หอ", "chamber", "room", "hall", "บ้าน"],
-            "river": ["แม่น้ำ", "ลำธาร", "river", "stream", "creek", "น้ำ"],
-            "bridge": ["สะพาน", "bridge", "ทางข้าม"],
-            "cave": ["ถ้ำ", "cave", "cavern", "อุโมงค์"],
-            "market": ["ตลาด", "market", "bazaar", "ร้านค้า"],
-            "inn": ["โรงเตี๊ยม", "ร้านเหล้า", "inn", "tavern", "guest house"],
-            "rice field": ["นา", "ทุ่งนา", "rice field", "paddy", "นาข้าว"],
-        }
-
-        combined = (scene_text + " " + scene_description).lower()
-
-        for location, keywords in location_keywords.items():
-            for kw in keywords:
-                if kw in combined:
-                    return location
-
-        # ถ้าหาไม่เจอ ให้ลอง extract จาก scene_description
-        if scene_description:
-            return scene_description.split(",")[0].strip().lower()
-
-        return "generic location"
+    # ─────────────────────────────────────────────
 
     def _generate_scene_prompt(
         self, scene_description: str, scene_text: str, style: str
     ) -> Dict:
         """
-        Generate scene prompt ที่สอดคล้องกับเนื้อเรื่องมากขึ้น
-
-        แก้ไขแล้ว:
-        - วิเคราะห์ event type จาก scene_text
-        - เพิ่ม atmospheric cues ที่ตรงกับเหตุการณ์
-        - ระบุสถานที่ให้ชัดเจนขึ้น
-        - ใช้ scene_text เต็มในการ generate แทนแค่ description
+        Generate background-only scene prompt from actual story content.
+        Forces LLM to read the text and extract concrete visual elements.
         """
-        if len(scene_text) > 3000:
-            scene_text = scene_text[:3000] + "..."
+        if len(scene_text) > 2500:
+            scene_text = scene_text[:2500] + "..."
 
         prefix = self._build_scene_prefix(style)
         negative = self._build_negative(style)
 
-        event_type, event_visuals = self._extract_scene_events(
-            scene_text, scene_description
-        )
-        location = self._extract_location_from_text(scene_text, scene_description)
+        prompt = f"""You are a Stable Diffusion prompt engineer creating a BACKGROUND/SCENERY prompt.
+        The image must show ONLY the environment — no characters, no people.
 
-        mood_hint = ""
-        if event_visuals:
-            mood_hint = f"\n        SCENE EVENT: {event_type}\n        VISUAL CUES REQUIRED: {event_visuals}"
+        Art style: {style}
+        Scene summary: {scene_description}
 
-        prompt = f"""You are a Stable Diffusion background prompt engineer.
+        Story text (read this to understand what the environment actually looks like):
+        ---
+        {scene_text}
+        ---
 
-        Create a detailed background prompt for this scene.
-
-        Scene description: {scene_description}
-        Location detected: {location}
-        Art style: {style}{mood_hint}
-
-        ACTUAL STORY CONTENT (use this to understand what is HAPPENING):
-        \"\"\"{scene_text}\"\"\"
-
+        Your task:
+        1. Read the story text and identify the ACTUAL location and environment described.
+        2. Extract concrete visual elements: architecture, terrain, objects, lighting, weather, time of day.
+        3. If the story describes fighting/chaos → include battle damage, dust, debris, broken objects.
+        4. If the story describes night → include darkness, moonlight, shadows, lanterns.
+        5. If the story describes rain/storm → include rain streaks, wet surfaces, dark clouds.
+        6. Do NOT invent locations not mentioned or implied in the text.
+        7. Do NOT use generic atmospheric filler tags like "beautiful", "epic", "serene", "fantasy scenery".
+        
         STRICT RULES:
-        1. Generate ONLY visual/scenery tags, NO characters or humans
-        2. 20-30 specific comma-separated tags
-        3. Order by importance: LOCATION → ARCHITECTURE/PROPS → LIGHTING → WEATHER/ATMOSPHERE
-        4. If the story shows FIGHTING/ACTION: include battle damage, dust, dynamic lighting, tension
-        5. If the story shows PEACEFUL scene: include calm lighting, serene atmosphere, gentle colors
-        6. If the story shows NIGHT/EVENING: include moonlight, shadows, lanterns, stars
-        7. NO generic tags like "beautiful landscape", "fantasy scenery", "epic scenery"
-        8. ALL tags must be concrete visual elements that reflect the actual scene content
+        - NEVER include any humans or human-related words.
+        - NEVER include words like: person, people, man, woman, warrior, fighter, figure, silhouette, enemy, soldier.
+        - If a scene involves action, describe ONLY the environment AFTER the action (damage, objects, surroundings).
+        - The scene must look EMPTY of people.
 
-        Example outputs:
+        Output format: 20-30 comma-separated English visual tags, ordered:
+        LOCATION TYPE → ARCHITECTURE/TERRAIN DETAILS → OBJECTS/PROPS → LIGHTING → WEATHER/ATMOSPHERE
 
-        Combat scene in courtyard:
-        {{"positive_prompt": "ancient stone courtyard, cracked stone floor, broken wooden training dummies, scattered debris, dust particles floating in air, torch light flickering, dramatic shadows, worn stone steps, battle damage on walls, tense atmosphere, evening light"}}
+        Example (riverside at night, character being attacked):
+        stone riverbank, shallow rushing water, large boulders, gnarled tree roots, moonlight reflecting on water, deep shadows between rocks, scattered fallen leaves, cold night air, mist rising from water, ominous atmosphere
 
-        Peaceful morning in village:
-        {{"positive_prompt": "rural village street, wooden houses with thatched roofs, morning mist rising, dirt path, dewdrops on grass, warm golden sunlight filtering through trees, chickens pecking ground, water well in center, soft haze in distance, calm atmosphere"}}
+        Example (village home interior, medical examination):
+        small wooden room interior, straw mat floor, simple wooden furniture, clay medicine jars on shelf, oil lamp casting warm light, paper sliding door, low ceiling beams, herbs hanging to dry, quiet domestic atmosphere
 
-        Night scene in forest:
-        {{"positive_prompt": "dense forest clearing, ancient twisted trees, moonbeams through canopy, glowing fireflies, thick undergrowth, moss-covered rocks, deep shadows, mist rising from ground, silver moonlight, mysterious atmosphere"}}
-
-        Return JSON only with key "positive_prompt":"""
+        Now write the tags for this scene.
+        Return JSON only: {{"positive_prompt": "tag1, tag2, tag3, ..."}}"""
 
         try:
-            raw = self._llm(prompt, temperature=0.65)
+            raw = self._llm(prompt, temperature=0.55)
             data = self._extract_json_object(raw)
 
             if "positive_prompt" in data:
@@ -623,42 +334,26 @@ class SceneAnalysis:
                 raw_tags = raw.strip()
                 raw_tags = re.sub(r"```(?:json)?", "", raw_tags).strip()
                 json_match = re.search(r'"positive_prompt"\s*:\s*"([^"]+)"', raw_tags)
-                if json_match:
-                    raw_tags = json_match.group(1)
+                raw_tags = json_match.group(1) if json_match else raw_tags
 
             cleaned = self._clean_tags(raw_tags)
 
-            if len(cleaned.split(",")) < 8:
-                location_defaults = {
-                    "temple": "ancient temple grounds, stone pagoda, incense smoke",
-                    "forest": "dense forest, tall trees, undergrowth",
-                    "village": "rural village, wooden houses, dirt path",
-                    "city": "ancient city street, stone buildings, market stalls",
-                    "courtyard": "stone courtyard, wooden pillars, open sky",
-                }
-                default = location_defaults.get(location, "story scene setting")
-                cleaned = f"{default}, {cleaned}"
-
-            if not cleaned:
-                raise ValueError("Empty prompt")
+            if len(cleaned.split(",")) < 8 or not cleaned:
+                raise ValueError("Too few tags")
 
             final_prompt = f"{prefix}, {cleaned}"
-
             if len(final_prompt) > 500:
                 final_prompt = final_prompt[:500]
 
-            return {
-                "positive_prompt": final_prompt,
-                "negative_prompt": negative,
-            }
+            return {"positive_prompt": final_prompt, "negative_prompt": negative}
 
         except Exception as e:
             print(f"⚠ Scene prompt error: {e}")
             return self._fallback_prompt(style)
 
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
     # PUBLIC ENTRY POINT
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
 
     def analyze_chapter_scenes(
         self, chapter_text: str, sentences: List[Dict], style: str
@@ -676,8 +371,7 @@ class SceneAnalysis:
 
         chunks = self._split_into_chunks(sentences, self.SCENE_CHUNK_SIZE)
         print(
-            f"🎬 Scene analysis: {len(sentences)} sentences → "
-            f"{len(chunks)} chunks (chunk_size={self.SCENE_CHUNK_SIZE})"
+            f"🎬 Scene analysis: {len(sentences)} sentences → {len(chunks)} chunks (chunk_size={self.SCENE_CHUNK_SIZE})"
         )
 
         all_chunk_scenes: List[List[Dict]] = []
@@ -720,31 +414,24 @@ class SceneAnalysis:
 
         return results
 
-    # --------------------------------------------------
-    # HELPER
-    # --------------------------------------------------
+    # ─────────────────────────────────────────────
+    # HELPERS
+    # ─────────────────────────────────────────────
 
     def _split_into_chunks(
         self, sentences: List[Dict], chunk_size: int
     ) -> List[List[Dict]]:
         if len(sentences) <= chunk_size:
             return [sentences]
-
         overlap = 2
-        chunks = []
-        i = 0
+        chunks, i = [], 0
         while i < len(sentences):
             chunk = sentences[i : i + chunk_size]
             chunks.append(chunk)
             if i + chunk_size >= len(sentences):
                 break
             i += chunk_size - overlap
-
         return chunks
-
-    # --------------------------------------------------
-    # LEGACY
-    # --------------------------------------------------
 
     def analyze_master_scene(self, chapter_text: str, style: str) -> Optional[Dict]:
         from .convert import ConvertTextToJson

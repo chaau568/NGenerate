@@ -15,10 +15,6 @@ from rest_framework import serializers
 
 from utils.file_url import build_file_url
 
-from django.db import transaction
-from payments.services.credit_service import CreditService
-from ngenerate_sessions.pricing import CreditPricing
-
 
 @extend_schema(
     summary="ดึงรายการนิยายทั้งหมดในชั้นหนังสือ",
@@ -252,76 +248,6 @@ def novel_characters(request, novel_id):
     },
     tags=["Chapters"],
 )
-# @api_view(["POST"])
-# @permission_classes([IsAuthenticated])
-# def create_chapter(request, novel_id):
-
-#     novel = get_object_or_404(Novel, id=novel_id, user=request.user)
-
-#     story_text = request.data.get("story")
-#     file_obj = request.FILES.get("file")
-
-#     # ---------------- TEXT ----------------
-
-#     if story_text:
-
-#         if isinstance(story_text, str):
-#             chapters_to_add = [story_text]
-
-#         elif isinstance(story_text, list):
-#             chapters_to_add = story_text
-
-#         else:
-#             return Response(
-#                 {"error": "Invalid text format"}, status=status.HTTP_400_BAD_REQUEST
-#             )
-
-#         new_chapters = novel.bulk_add_chapters(chapters_to_add)
-
-#         return Response(
-#             {
-#                 "status": "completed",
-#                 "message": f"Created {len(new_chapters)} chapters from text",
-#                 "chapters": [{"id": c.id, "title": c.title} for c in new_chapters],
-#             },
-#             status=status.HTTP_201_CREATED,
-#         )
-
-#     # ---------------- FILE ----------------
-
-#     if file_obj:
-#         notification = Notification.objects.create(
-#             user=request.user,
-#             novel=novel,
-#             task_type="upload",
-#             message=f"Processing file {file_obj.name}",
-#         )
-
-#         file_bytes = file_obj.read()
-#         file_name = file_obj.name
-#         content_type = file_obj.content_type
-
-#         process_uploaded_file_task.delay(
-#             novel.id,
-#             file_bytes,
-#             file_name,
-#             content_type,
-#             notification.id,
-#         )
-
-#         return Response(
-#             {
-#                 "status": "processing",
-#                 "message": "File is being processed in background.",
-#             },
-#             status=status.HTTP_202_ACCEPTED,
-#         )
-
-#     return Response(
-#         {"error": "No content or file provided"},
-#         status=status.HTTP_400_BAD_REQUEST,
-#     )
-
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])

@@ -22,16 +22,24 @@ SECRET_KEY = env("SECRET_KEY", default="unsafe-secret-key")
 DEBUG = env.bool("DEBUG", default=True)
 
 ALLOWED_HOSTS = [
+    ".runpod.net",
     "biometrically-towerless-yadiel.ngrok-free.dev",
     "127.0.0.1", 
     "localhost",
     "backend",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.runpod.net"
+]
+
+
+
 # -------------------------------------------------
 # COSR Config
 # -------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
+    "https://[YOUR_POD_ID]-3000.proxy.runpod.net",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
@@ -111,23 +119,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # DATABASE (Neon PostgreSQL)
 # -------------------------------------------------
 
-# DATABASES = {
-#     "default": dj_database_url.config(
-#         default=env("DATABASE_URL"),
-#         conn_max_age=0,
-#         ssl_require=True,
-#     )
-# }
-
-# -------------------------------------------------
-# DATABASE (PostgreSQL Docker Local)
-# -------------------------------------------------
-
 DATABASES = {
     "default": dj_database_url.config(
         default=env("DATABASE_URL"),
         conn_max_age=600,
-        ssl_require=ENVIRONMENT == "production",
+        ssl_require=True,
     )
 }
 
@@ -315,8 +311,8 @@ AI_TIMEOUT = env.int("TIMEOUT", default=3600)
 
 BASE_FILE_URL=f"{AI_API_URL}/files"
 
-SITE_URL = env("SITE_URL", default="http://localhost:8000")
-
+SITE_BACK_URL = env("SITE_BACK_URL", default="http://localhost:8000")
+SITE_FRONT_URL = env("SITE_FRONT_URL", default="http://localhost:3000")
 
 # -------------------------------------------------
 # MEDIA (Django)

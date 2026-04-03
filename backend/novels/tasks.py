@@ -14,7 +14,7 @@ def process_uploaded_file_task(
 
     try:
         callback_path = reverse("runpod_webhook")
-        callback_url = f"{settings.SITE_URL}{callback_path}"
+        callback_url = f"{settings.SITE_BACK_URL}{callback_path}"
 
         url = f"{settings.AI_API_URL}/preprocess/novel"
 
